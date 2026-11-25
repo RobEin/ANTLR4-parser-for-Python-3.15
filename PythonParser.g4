@@ -803,7 +803,7 @@ list
     : '[' star_named_expressions_sequence? ']';
 
 tuple
-    : '(' (star_named_expressions_sequence ',' star_named_expressions_sequence?  )? ')';
+    : '(' (star_named_expression_sequence ',' star_named_expressions_sequence?  )? ')';
 
 set: LBRACE star_named_expressions_sequence RBRACE;
 
