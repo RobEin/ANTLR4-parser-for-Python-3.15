@@ -95,9 +95,9 @@ simple_stmts:
 simple_stmt:
     | assignment
     | type_alias
+    | import_stmt
     | star_expressions 
     | return_stmt
-    | import_stmt
     | raise_stmt
     | pass_stmt
     | del_stmt
@@ -150,7 +150,8 @@ return_stmt:
     | 'return' [star_expressions] 
 
 raise_stmt:
-    | 'raise' expression ['from' expression ] 
+    | 'raise' expression 'from' expression 
+    | 'raise' expression 
     | 'raise' 
 
 pass_stmt:
@@ -171,7 +172,8 @@ del_stmt:
 
 yield_stmt: yield_expr 
 
-assert_stmt: 'assert' expression [',' expression ] 
+assert_stmt:
+    | 'assert' expression [',' expression ] 
 
 import_stmt:
     | import_name
@@ -180,11 +182,17 @@ import_stmt:
 # Import statements
 # -----------------
 
-import_name: 'import' dotted_as_names 
+import_name:
+    | "lazy" 'import' dotted_as_names 
+    | 'import' dotted_as_names 
+
 # note below: the ('.' | '...') is necessary because '...' is tokenized as ELLIPSIS
 import_from:
+    | "lazy" 'from' ('.' | '...')* dotted_name 'import' import_from_targets 
+    | "lazy" 'from' ('.' | '...')+ 'import' import_from_targets 
     | 'from' ('.' | '...')* dotted_name 'import' import_from_targets 
     | 'from' ('.' | '...')+ 'import' import_from_targets 
+
 import_from_targets:
     | '(' import_from_as_names [','] ')' 
     | import_from_as_names !','
@@ -424,10 +432,12 @@ complex_number:
 
 signed_number:
     | NUMBER
+    | '+' NUMBER 
     | '-' NUMBER 
 
 signed_real_number:
     | real_number
+    | '+' real_number 
     | '-' real_number 
 
 real_number:
@@ -538,9 +548,12 @@ expressions:
     | expression
 
 expression:
-    | disjunction 'if' disjunction 'else' expression 
+    | if_expression
     | disjunction
     | lambdef
+
+if_expression:
+    | disjunction 'if' disjunction 'else' expression 
 
 yield_expr:
     | 'yield' 'from' expression 
@@ -557,9 +570,14 @@ star_expression:
 
 star_named_expressions: ','.star_named_expression+ [','] 
 
+star_named_expressions_sequence: ','.star_named_expression_sequence+ [','] 
+
 star_named_expression:
     | '*' bitwise_or 
     | named_expression
+
+star_named_expression_sequence:
+    | star_named_expression
 
 assignment_expression:
     | NAME ':=' ~ expression 
@@ -688,9 +706,9 @@ atom:
     | 'None' 
     | strings
     | NUMBER
-    | (tuple | group | genexp)
-    | (list | listcomp)
-    | (dict | set | dictcomp | setcomp)
+    | (genexp | tuple | group)
+    | (listcomp | list)
+    | (dictcomp | setcomp | dict | set)
     | '...' 
 
 group:
@@ -782,12 +800,12 @@ strings:
     | tstring+ 
 
 list:
-    | '[' [star_named_expressions] ']' 
+    | '[' [star_named_expressions_sequence] ']' 
 
 tuple:
-    | '(' [star_named_expression ',' [star_named_expressions]  ] ')' 
+    | '(' [star_named_expression_sequence ',' [star_named_expressions_sequence]  ] ')' 
 
-set: '{' star_named_expressions '}' 
+set: '{' star_named_expressions_sequence '}' 
 
 # Dicts
 # -----
@@ -814,16 +832,17 @@ for_if_clause:
     | 'for' star_targets 'in' ~ disjunction ('if' disjunction )* 
 
 listcomp:
-    | '[' named_expression for_if_clauses ']' 
+    | '[' star_named_expression for_if_clauses ']' 
 
 setcomp:
-    | '{' named_expression for_if_clauses '}' 
+    | '{' star_named_expression for_if_clauses '}' 
 
 genexp:
-    | '(' ( assignment_expression | expression !':=') for_if_clauses ')' 
+    | '(' ( assignment_expression | expression !':=' | starred_expression ) for_if_clauses ')' 
 
 dictcomp:
     | '{' kvpair for_if_clauses '}' 
+    | '{' '**' expression for_if_clauses '}' 
 
 # FUNCTION CALL ARGUMENTS
 # =======================

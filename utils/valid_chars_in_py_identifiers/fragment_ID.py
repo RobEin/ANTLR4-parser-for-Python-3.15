@@ -31,7 +31,8 @@ def main() -> None:
     output = f"{continue_fragment}\n\n{start_fragment}"
     
     print(output)
-    _save_to_file(output, "fragment_ID.txt")
+    with open("fragment_ID.txt", "w", newline="\n", encoding="utf-8") as f:
+        f.write(output)
 
 
 def _build_continue_fragment(continue_codes: List[int], python_version: str) -> str:

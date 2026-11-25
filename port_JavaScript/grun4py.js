@@ -3,6 +3,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { TextDecoder } from "node:util";
 
 import iconv from "iconv-lite";
 
@@ -24,8 +25,7 @@ const Encodings = {
 };
 
 class Grun4py {
-    static UTF8 = Encodings.UTF8;
-
+    static DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
     static ENCODING_REGEX = /^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)/;
     static COMMENT_REGEX = /^[ \t\f]*(#.*)?$/;
 
@@ -48,7 +48,7 @@ class Grun4py {
         // ASCII
         ascii: "ascii",
         usascii: "ascii",
-        ansiX341968: "ascii",
+        ansix341968: "ascii",
         cp367: "ascii",
         // Deprecated alias
         binary: "latin-1",
@@ -56,19 +56,32 @@ class Grun4py {
 
     static main(args) {
         if (args.length < 1) {
-            console.error("Error: Please provide an input file path");
+            console.log(
+                "\n" +
+                "------------------------------\n" +
+                "USAGE:\n" +
+                "npx tsx grun4py.ts filename.py\n" +
+                "\n" +
+                "------------------------------\n" +
+                "TOKEN OUTPUT FORMAT:\n" +
+                "[@TokenIndex,StartIndex:StopIndex='TokenText',<TokenName>,Channel,Line:Column]\n" +
+                "Channel is optional. Lines are 1-based; columns are 0-based.\n" +
+                "\n" +                
+                "------------------------------"
+            );
+
             process.exit(1);
         }
 
         const filePath = args[0];
 
         try {
-            const encodingName = this.detectEncoding(filePath);
-            const text = this.readFileWithEncoding(filePath, encodingName);
+            const sourceEncoding = this.detectEncoding(filePath);
+            const text = this.readFileWithEncoding(filePath, sourceEncoding);
             const input = CharStreams.fromString(text);
 
             const lexer = new PythonLexer(input);
-            lexer.setEncodingName(encodingName); // generate ENCODING token
+            lexer.setEncoding(sourceEncoding); // generate ENCODING token
 
             const tokens = new CommonTokenStream(lexer);
             const parser = new PythonParser(tokens);
@@ -86,21 +99,20 @@ class Grun4py {
         }
     }
 
-    static readFileWithEncoding(filePath, encodingName) {
-        if (this.isUTF8(encodingName)) {
-            // IMPORTANT: Read UTF‑8 files as text, not raw bytes.
-            // The ANTLR4 JavaScript runtime only accepts UTF‑16 JS strings
-            // and does NOT decode UTF‑8 byte sequences internally.
-            // Passing a Buffer would split non‑BMP characters (surrogate pairs)
-            // into two code units, causing incorrect tokenization.
-            return fs.readFileSync(filePath, this.UTF8);
-        }
+    static readFileWithEncoding(filePath, sourceEncoding) {
+        // IMPORTANT: Decode the file using the detected source encoding before
+        // creating the ANTLR CharStream. This ensures that encoding errors are
+        // detected before lexical analysis and that the lexer receives decoded text.
 
-        const buffer = fs.readFileSync(filePath);
         try {
-            return iconv.decode(buffer, encodingName);
+            const buffer = fs.readFileSync(filePath);
+            if (this.isUTF8(sourceEncoding)) {
+                const decoder = new TextDecoder("utf-8", { fatal: true });
+                return decoder.decode(buffer);
+            }
+            return iconv.decode(buffer, sourceEncoding);
         } catch (ex) {
-            throw new Error(`Failed to decode file with encoding '${encodingName}': ${ex instanceof Error ? ex.message : String(ex)}`);
+            throw new Error(`Failed to decode file with encoding '${sourceEncoding}': ` + `${ex instanceof Error ? ex.message : String(ex)}`,{ cause: ex });
         }
     }
 
@@ -116,7 +128,7 @@ class Grun4py {
         const channelName =
             token.channel === Token.DEFAULT_CHANNEL
                 ? ""
-                : `channel=${token.channel},`;
+                : `channel=${PythonLexer.channelNames[token.channel]},`;
 
         return `[@${token.tokenIndex},${token.start}:${token.stop}='${tokenText}',<${tokenName}>,${channelName}${token.line}:${token.column}]`;
     }
@@ -132,29 +144,30 @@ class Grun4py {
     // ---------- Encoding detection ----------
 
     static detectEncoding(filePath) {
-        const hasUTF8BOM = this.detectUTF8BOM(filePath);
+        const hasUTF8BOM = this.detectBOM(filePath);
         const commentEnc = this.detectEncodingFromComments(filePath, hasUTF8BOM);
         return this.resolveFinalEncoding(filePath, hasUTF8BOM, commentEnc);
     }
 
-    static detectUTF8BOM(filePath) {
+    static detectBOM(filePath) {
         const buffer = Buffer.alloc(Encodings.MAX_BOM_LENGTH);
         const fd = fs.openSync(filePath, "r");
 
         try {
-            fs.readSync(fd, buffer, 0, 4, 0);
-            if (this.bufferStartsWith(buffer, Encodings.UTF8_BOM)) return true;
-            if (this.bufferStartsWith(buffer, Encodings.UTF32_BE_BOM)) throw this.bomError(filePath, "UTF-32 BE BOM");
-            if (this.bufferStartsWith(buffer, Encodings.UTF32_LE_BOM)) throw this.bomError(filePath, "UTF-32 LE BOM");
-            if (this.bufferStartsWith(buffer, Encodings.UTF16_BE_BOM)) throw this.bomError(filePath, "UTF-16 BE BOM");
-            if (this.bufferStartsWith(buffer, Encodings.UTF16_LE_BOM)) throw this.bomError(filePath, "UTF-16 LE BOM");
+            const bytesRead = fs.readSync(fd, buffer, 0, Encodings.MAX_BOM_LENGTH, 0);
+            if (this.bufferStartsWith(buffer, bytesRead, Encodings.UTF8_BOM)) return true;
+            if (this.bufferStartsWith(buffer, bytesRead, Encodings.UTF32_BE_BOM)) throw this.bomError(filePath, "UTF-32 BE BOM");
+            if (this.bufferStartsWith(buffer, bytesRead, Encodings.UTF32_LE_BOM)) throw this.bomError(filePath, "UTF-32 LE BOM");
+            if (this.bufferStartsWith(buffer, bytesRead, Encodings.UTF16_BE_BOM)) throw this.bomError(filePath, "UTF-16 BE BOM");
+            if (this.bufferStartsWith(buffer, bytesRead, Encodings.UTF16_LE_BOM)) throw this.bomError(filePath, "UTF-16 LE BOM");
             return false;
         } finally {
             fs.closeSync(fd);
         }
     }
 
-    static bufferStartsWith(buffer, prefix) {
+    static bufferStartsWith(buffer, bytesRead, prefix) {
+        if (bytesRead < prefix.length) return false;
         return prefix.every((byte, i) => buffer[i] === byte);
     }
 
@@ -219,19 +232,19 @@ class Grun4py {
         return this.ENCODING_MAP[normalized] ?? enc;
     }
 
-    static resolveFinalEncoding(filePath, hasUTF8BOM, commentEncodingName) {
+    static resolveFinalEncoding(filePath, hasUTF8BOM, commentEncoding) {
         const hasConflict =
-            commentEncodingName &&
+            commentEncoding &&
             hasUTF8BOM &&
-            !this.isUTF8(commentEncodingName);
+            !this.isUTF8(commentEncoding);
 
         if (hasConflict) {
             throw new Error(
-                `Encoding problem for '${path.basename(filePath)}': ${this.UTF8} BOM`
+                `Encoding problem for '${path.basename(filePath)}': ${this.DEFAULT_ENCODING} BOM`
             );
         }
 
-        return commentEncodingName || this.UTF8;
+        return commentEncoding || this.DEFAULT_ENCODING;
     }
 
     static isUTF8(enc) {

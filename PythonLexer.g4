@@ -22,19 +22,19 @@ THE SOFTWARE.
 
  /*
   * Project      : an ANTLR4 lexer grammar for Python 3 programming language
-  *                https://github.com/RobEin/ANTLR4-parser-for-Python-3.14
+  *                https://github.com/RobEin/ANTLR4-parser-for-Python-3.15
   * Developed by : Robert Einhorn, robert.einhorn.hu@gmail.com
   */
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html
+// https://docs.python.org/3.15/reference/lexical_analysis.html
 lexer grammar PythonLexer;
 
 // the helper class for this grammar that assists in tokenizing indentation, interpolated strings, and the encoding declaration
 options { superClass=PythonLexerBase; }
 
 tokens {
-    ENCODING // https://docs.python.org/3.14/reference/lexical_analysis.html#encoding-declarations
-  , INDENT, DEDENT // https://docs.python.org/3.14/reference/lexical_analysis.html#indentation
+    ENCODING // https://docs.python.org/3.15/reference/lexical_analysis.html#encoding-declarations
+  , INDENT, DEDENT // https://docs.python.org/3.15/reference/lexical_analysis.html#indentation
   , TYPE_COMMENT // not supported, only for compatibility with the parser grammar
   , FSTRING_START, FSTRING_MIDDLE, FSTRING_END // https://peps.python.org/pep-0701/#specification
   , TSTRING_START, TSTRING_MIDDLE, TSTRING_END // https://peps.python.org/pep-0750/#specification
@@ -44,12 +44,12 @@ tokens {
  *  default lexer mode
  */
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#encoding-declarations
+// https://peps.python.org/pep-0263/
 BOM : '\uFEFF';
 // The BOM unicode character indicates that a BOM byte sequence (for Python is only UTF‑8: EF BB BF) was present at the start of the file.
 // It is not part of Python source code and is therefore skipped in PythonLexerBase.
 
-// https://docs.python.org/3.14/library/token.html#module-token
+// https://docs.python.org/3.15/library/token.html#module-token
 LPAR             : '(';
 LSQB             : '[';
 LBRACE           : '{';
@@ -71,7 +71,7 @@ GREATER          : '>';
 EQUAL            : '=';
 PERCENT          : '%';
 EQEQUAL          : '==';
-INEQUAL          : '<>'; // not implemented (from __future__ import barry_as_FLUFL)
+INEQUAL          : '<>'; // Support for "from __future__ import barry_as_FLUFL" is not implemented.
 NOTEQUAL         : '!=';
 LESSEQUAL        : '<=';
 GREATEREQUAL     : '>=';
@@ -100,7 +100,7 @@ ELLIPSIS         : '...';
 COLONEQUAL       : ':=';
 EXCLAMATION      : '!';
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#keywords
+// https://docs.python.org/3.15/reference/lexical_analysis.html#keywords
 FALSE    : 'False';
 AWAIT    : 'await';
 ELSE     : 'else';
@@ -137,42 +137,43 @@ IF       : 'if';
 OR       : 'or';
 YIELD    : 'yield';
 
-// *** Soft Keywords: https://docs.python.org/3.14/reference/lexical_analysis.html#soft-keywords
-                            // the parser grammar determines whether it is an ...
-NAME_OR_TYPE     : 'type';  // ... identifier or a type  keyword,   depending on the source code context
-NAME_OR_MATCH    : 'match'; // ... identifier or a match keyword,   depending on the source code context
-NAME_OR_CASE     : 'case';  // ... identifier or a case  keyword,   depending on the source code context
-NAME_OR_WILDCARD : '_';     // ... identifier or a wildcard symbol, depending on the source code context
+// *** Soft Keywords: https://docs.python.org/3.15/reference/lexical_analysis.html#soft-keywords
+// the parser grammar determines whether it is an soft keyword or NAME token (identifier)
+NAME_OR_MATCH    : 'match'; // soft keyword when used  in  the  match  statement otherwise NAME token
+NAME_OR_CASE     : 'case';  // soft keyword when used  in  the  match  statement otherwise NAME token
+NAME_OR_WILDCARD : '_';     // soft keyword when used  in  the  match  statement otherwise NAME token
+NAME_OR_TYPE     : 'type';  // soft keyword when used  in  the  type   statement otherwise NAME token
+NAME_OR_LAZY     : 'lazy';  // soft keyword when used before an import statement otherwise NAME token
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#identifiers
+// https://docs.python.org/3.15/reference/lexical_analysis.html#identifiers
 NAME : ID_START ID_CONTINUE*;
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#numeric-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#numeric-literals
 NUMBER
     : INTEGER
     | FLOAT_NUMBER
     | IMAG_NUMBER
     ;
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#string-and-bytes-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#string-and-bytes-literals
 STRING
     : STRING_LITERAL
     | BYTES_LITERAL
     ;
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#physical-lines
+// https://docs.python.org/3.15/reference/lexical_analysis.html#physical-lines
 NEWLINE : '\r'? '\n'; // Unix, Windows
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#comments
+// https://docs.python.org/3.15/reference/lexical_analysis.html#comments
 COMMENT : '#' ~[\r\n]*                    -> channel(HIDDEN);
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#whitespace-between-tokens
+// https://docs.python.org/3.15/reference/lexical_analysis.html#whitespace-between-tokens
 WS : [ \t\f]+                             -> channel(HIDDEN);
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#explicit-line-joining
+// https://docs.python.org/3.15/reference/lexical_analysis.html#explicit-line-joining
 EXPLICIT_LINE_JOINING : BACKSLASH_NEWLINE -> channel(HIDDEN);
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#formatted-string-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#formatted-string-literals
 FSTRING_START : FSTRING_PREFIX STRING_QUOTES; // pushMode(...._FSTRING_MODE) is called in PythonLexerBase
 TSTRING_START : TSTRING_PREFIX STRING_QUOTES; // pushMode(...._TSTRING_MODE) is called in PythonLexerBase
 
@@ -424,9 +425,9 @@ mode DQ3R_TSTRING_FORMAT_SPECIFICATION_MODE; // called from the PythonLexerBase 
  *  fragments
  */
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#literals
 //
-// https://docs.python.org/3.14/reference/lexical_analysis.html#string-and-bytes-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#string-and-bytes-literals
 fragment STRING_LITERAL : STRING_PREFIX? (SHORT_STRING | LONG_STRING);
 fragment STRING_PREFIX options { caseInsensitive=true; }  : 'r' | 'u'; // 'r' | 'u' | 'R' | 'U'
 
@@ -452,7 +453,7 @@ fragment LONG__STRING_CHAR                 : ~[\\];            // <any source ch
 // https://docs.python.org/3/reference/lexical_analysis.html#escape-sequences
 fragment STRING_ESCAPE_SEQ : ESCAPE_SEQ_NEWLINE | '\\' .;       // "\" <any source character>
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#string-and-bytes-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#string-and-bytes-literals
 fragment BYTES_LITERAL : BYTES_PREFIX (SHORT_BYTES | LONG_BYTES);
 fragment BYTES_PREFIX options { caseInsensitive=true; } : 'b' | 'br' | 'rb'; // 'b' | 'B' | 'br' | 'Br' | 'bR' | 'BR' | 'rb' | 'rB' | 'Rb' | 'RB'
 
@@ -490,7 +491,7 @@ fragment SHORT_DOUBLE_QUOTED_BYTES_CHAR                        // <any ASCII cha
 fragment LONG_BYTES_CHAR  : [\u0000-\u005B] | [\u005D-\u007F]; // <any ASCII character except "\">
 fragment BYTES_ESCAPE_SEQ : '\\' [\u0000-\u007F];              // "\" <any ASCII character>
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#formatted-string-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#formatted-string-literals
 fragment FSTRING_PREFIX options { caseInsensitive=true; } : 'f' | 'fr' | 'rf'; // 'f' | 'F' | 'fr' | 'Fr' | 'fR' | 'FR' | 'rf' | 'rF' | 'Rf' | 'RF'
 fragment TSTRING_PREFIX options { caseInsensitive=true; } : 't' | 'tr' | 'rt'; // 't' | 'T' | 'tr' | 'Tr' | 'tR' | 'TR' | 'rt' | 'rT' | 'Rt' | 'RT'
 fragment STRING_QUOTES : [']
@@ -552,7 +553,7 @@ fragment ESCAPE_SEQ_NEWLINE    : BACKSLASH_NEWLINE; // this escape sequence acts
                                                     // the backslash and newline are ignored by the Python interpreter
 fragment BACKSLASH_NEWLINE : '\\' NEWLINE;
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#integer-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#integer-literals
 fragment INTEGER        : DEC_INTEGER | BIN_INTEGER | OCT_INTEGER | HEX_INTEGER;
 fragment DEC_INTEGER    : NON_ZERO_DIGIT ('_'? DIGIT)* | '0'+ ('_'? '0')*;
 fragment BIN_INTEGER    : '0' ('b' | 'B') ('_'? BIN_DIGIT)+;
@@ -564,7 +565,7 @@ fragment BIN_DIGIT      : '0' | '1';
 fragment OCT_DIGIT      : [0-7];
 fragment HEX_DIGIT      : DIGIT | [a-f] | [A-F];
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#floating-point-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#floating-point-literals
 fragment FLOAT_NUMBER   : POINT_FLOAT | EXPONENT_FLOAT;
 fragment POINT_FLOAT    : DIGIT_PART? FRACTION | DIGIT_PART '.';
 fragment EXPONENT_FLOAT : (DIGIT_PART | POINT_FLOAT) EXPONENT;
@@ -572,11 +573,12 @@ fragment DIGIT_PART     : DIGIT ('_'? DIGIT)*;
 fragment FRACTION       : '.' DIGIT_PART;
 fragment EXPONENT       : ('e' | 'E') ('+' | '-')? DIGIT_PART;
 
-// https://docs.python.org/3.14/reference/lexical_analysis.html#imaginary-literals
+// https://docs.python.org/3.15/reference/lexical_analysis.html#imaginary-literals
 fragment IMAG_NUMBER : (FLOAT_NUMBER | DIGIT_PART) ('j' | 'J');
 
-// https://github.com/RobEin/ANTLR4-parser-for-Python-3.14/tree/main/utils/valid_chars_in_py_identifiers
-fragment ID_CONTINUE // for Python 3.14.6
+
+// https://github.com/RobEin/ANTLR4-parser-for-Python-3.15/tree/main/utils/valid_chars_in_py_identifiers
+fragment ID_CONTINUE // for Python 3.15.2
     : ID_START
     | '\u{0030}' .. '\u{0039}'
     | '\u{00B7}'
@@ -736,7 +738,8 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{1A7F}' .. '\u{1A89}'
     | '\u{1A90}' .. '\u{1A99}'
     | '\u{1AB0}' .. '\u{1ABD}'
-    | '\u{1ABF}' .. '\u{1ACE}'
+    | '\u{1ABF}' .. '\u{1ADD}'
+    | '\u{1AE0}' .. '\u{1AEB}'
     | '\u{1B00}' .. '\u{1B04}'
     | '\u{1B34}' .. '\u{1B44}'
     | '\u{1B50}' .. '\u{1B59}'
@@ -827,7 +830,7 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{10D40}' .. '\u{10D49}'
     | '\u{10D69}' .. '\u{10D6D}'
     | '\u{10EAB}' .. '\u{10EAC}'
-    | '\u{10EFC}' .. '\u{10EFF}'
+    | '\u{10EFA}' .. '\u{10EFF}'
     | '\u{10F46}' .. '\u{10F50}'
     | '\u{10F82}' .. '\u{10F85}'
     | '\u{11000}' .. '\u{11002}'
@@ -900,6 +903,7 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{11A47}'
     | '\u{11A51}' .. '\u{11A5B}'
     | '\u{11A8A}' .. '\u{11A99}'
+    | '\u{11B60}' .. '\u{11B67}'
     | '\u{11BF0}' .. '\u{11BF9}'
     | '\u{11C2F}' .. '\u{11C36}'
     | '\u{11C38}' .. '\u{11C3F}'
@@ -916,6 +920,7 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{11D90}' .. '\u{11D91}'
     | '\u{11D93}' .. '\u{11D97}'
     | '\u{11DA0}' .. '\u{11DA9}'
+    | '\u{11DE0}' .. '\u{11DE9}'
     | '\u{11EF3}' .. '\u{11EF6}'
     | '\u{11F00}' .. '\u{11F01}'
     | '\u{11F03}'
@@ -966,6 +971,10 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{1E4EC}' .. '\u{1E4F9}'
     | '\u{1E5EE}' .. '\u{1E5EF}'
     | '\u{1E5F1}' .. '\u{1E5FA}'
+    | '\u{1E6E3}'
+    | '\u{1E6E6}'
+    | '\u{1E6EE}' .. '\u{1E6EF}'
+    | '\u{1E6F5}'
     | '\u{1E8D0}' .. '\u{1E8D6}'
     | '\u{1E944}' .. '\u{1E94A}'
     | '\u{1E950}' .. '\u{1E959}'
@@ -973,7 +982,7 @@ fragment ID_CONTINUE // for Python 3.14.6
     | '\u{E0100}' .. '\u{E01EF}'
     ;
 
-fragment ID_START // for Python 3.14.6
+fragment ID_START // for Python 3.15.2
     : '\u{0041}' .. '\u{005A}'
     | '\u{005F}'
     | '\u{0061}' .. '\u{007A}'
@@ -1025,7 +1034,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{0840}' .. '\u{0858}'
     | '\u{0860}' .. '\u{086A}'
     | '\u{0870}' .. '\u{0887}'
-    | '\u{0889}' .. '\u{088E}'
+    | '\u{0889}' .. '\u{088F}'
     | '\u{08A0}' .. '\u{08C9}'
     | '\u{0904}' .. '\u{0939}'
     | '\u{093D}'
@@ -1091,7 +1100,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{0C2A}' .. '\u{0C39}'
     | '\u{0C3D}'
     | '\u{0C58}' .. '\u{0C5A}'
-    | '\u{0C5D}'
+    | '\u{0C5C}' .. '\u{0C5D}'
     | '\u{0C60}' .. '\u{0C61}'
     | '\u{0C80}'
     | '\u{0C85}' .. '\u{0C8C}'
@@ -1100,7 +1109,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{0CAA}' .. '\u{0CB3}'
     | '\u{0CB5}' .. '\u{0CB9}'
     | '\u{0CBD}'
-    | '\u{0CDD}' .. '\u{0CDE}'
+    | '\u{0CDC}' .. '\u{0CDE}'
     | '\u{0CE0}' .. '\u{0CE1}'
     | '\u{0CF1}' .. '\u{0CF2}'
     | '\u{0D04}' .. '\u{0D0C}'
@@ -1282,11 +1291,8 @@ fragment ID_START // for Python 3.14.6
     | '\u{A6A0}' .. '\u{A6EF}'
     | '\u{A717}' .. '\u{A71F}'
     | '\u{A722}' .. '\u{A788}'
-    | '\u{A78B}' .. '\u{A7CD}'
-    | '\u{A7D0}' .. '\u{A7D1}'
-    | '\u{A7D3}'
-    | '\u{A7D5}' .. '\u{A7DC}'
-    | '\u{A7F2}' .. '\u{A801}'
+    | '\u{A78B}' .. '\u{A7DC}'
+    | '\u{A7F1}' .. '\u{A801}'
     | '\u{A803}' .. '\u{A805}'
     | '\u{A807}' .. '\u{A80A}'
     | '\u{A80C}' .. '\u{A822}'
@@ -1409,6 +1415,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{108F4}' .. '\u{108F5}'
     | '\u{10900}' .. '\u{10915}'
     | '\u{10920}' .. '\u{10939}'
+    | '\u{10940}' .. '\u{10959}'
     | '\u{10980}' .. '\u{109B7}'
     | '\u{109BE}' .. '\u{109BF}'
     | '\u{10A00}'
@@ -1431,7 +1438,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{10D6F}' .. '\u{10D85}'
     | '\u{10E80}' .. '\u{10EA9}'
     | '\u{10EB0}' .. '\u{10EB1}'
-    | '\u{10EC2}' .. '\u{10EC4}'
+    | '\u{10EC2}' .. '\u{10EC7}'
     | '\u{10F00}' .. '\u{10F1C}'
     | '\u{10F27}'
     | '\u{10F30}' .. '\u{10F45}'
@@ -1524,6 +1531,7 @@ fragment ID_START // for Python 3.14.6
     | '\u{11D67}' .. '\u{11D68}'
     | '\u{11D6A}' .. '\u{11D89}'
     | '\u{11D98}'
+    | '\u{11DB0}' .. '\u{11DDB}'
     | '\u{11EE0}' .. '\u{11EF2}'
     | '\u{11F02}'
     | '\u{11F04}' .. '\u{11F10}'
@@ -1548,14 +1556,17 @@ fragment ID_START // for Python 3.14.6
     | '\u{16B7D}' .. '\u{16B8F}'
     | '\u{16D40}' .. '\u{16D6C}'
     | '\u{16E40}' .. '\u{16E7F}'
+    | '\u{16EA0}' .. '\u{16EB8}'
+    | '\u{16EBB}' .. '\u{16ED3}'
     | '\u{16F00}' .. '\u{16F4A}'
     | '\u{16F50}'
     | '\u{16F93}' .. '\u{16F9F}'
     | '\u{16FE0}' .. '\u{16FE1}'
     | '\u{16FE3}'
-    | '\u{17000}' .. '\u{187F7}'
-    | '\u{18800}' .. '\u{18CD5}'
-    | '\u{18CFF}' .. '\u{18D08}'
+    | '\u{16FF2}' .. '\u{16FF6}'
+    | '\u{17000}' .. '\u{18CD5}'
+    | '\u{18CFF}' .. '\u{18D1E}'
+    | '\u{18D80}' .. '\u{18DF2}'
     | '\u{1AFF0}' .. '\u{1AFF3}'
     | '\u{1AFF5}' .. '\u{1AFFB}'
     | '\u{1AFFD}' .. '\u{1AFFE}'
@@ -1610,6 +1621,12 @@ fragment ID_START // for Python 3.14.6
     | '\u{1E4D0}' .. '\u{1E4EB}'
     | '\u{1E5D0}' .. '\u{1E5ED}'
     | '\u{1E5F0}'
+    | '\u{1E6C0}' .. '\u{1E6DE}'
+    | '\u{1E6E0}' .. '\u{1E6E2}'
+    | '\u{1E6E4}' .. '\u{1E6E5}'
+    | '\u{1E6E7}' .. '\u{1E6ED}'
+    | '\u{1E6F0}' .. '\u{1E6F4}'
+    | '\u{1E6FE}' .. '\u{1E6FF}'
     | '\u{1E7E0}' .. '\u{1E7E6}'
     | '\u{1E7E8}' .. '\u{1E7EB}'
     | '\u{1E7ED}' .. '\u{1E7EE}'
@@ -1651,13 +1668,11 @@ fragment ID_START // for Python 3.14.6
     | '\u{1EEA5}' .. '\u{1EEA9}'
     | '\u{1EEAB}' .. '\u{1EEBB}'
     | '\u{20000}' .. '\u{2A6DF}'
-    | '\u{2A700}' .. '\u{2B739}'
-    | '\u{2B740}' .. '\u{2B81D}'
-    | '\u{2B820}' .. '\u{2CEA1}'
+    | '\u{2A700}' .. '\u{2B81D}'
+    | '\u{2B820}' .. '\u{2CEAD}'
     | '\u{2CEB0}' .. '\u{2EBE0}'
     | '\u{2EBF0}' .. '\u{2EE5D}'
     | '\u{2F800}' .. '\u{2FA1D}'
     | '\u{30000}' .. '\u{3134A}'
-    | '\u{31350}' .. '\u{323AF}'
+    | '\u{31350}' .. '\u{33479}'
     ;
-    

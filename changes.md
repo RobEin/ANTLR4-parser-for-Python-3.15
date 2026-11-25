@@ -1,3 +1,14 @@
+# Nov. 25, 2026
+- parser grammar update for Python 3.15.2
+- added 'lazy' soft keyword
+- removed inconsistent tabs and spaces checking in indentations 
+
+# Jul. 24, 2026
+- parser grammar update for Python 3.14.6
+- tokenizing t-string literals
+- tokenizing BOM Unicode character at the start of the file so it is skipped in the token stream
+- moved encoding detection from PythonLexerBase to a separate component (grun4py)
+
 # Dec. 24, 2025
 - parser grammar update for Python 3.14.2
 - tokenizing t-string literals
@@ -28,7 +39,7 @@
 - Fix that `case [a, *_] if a == 0:` throws error rule soft_kw__not__wildcard failed predicate:
   `{this.isnotEqualToCurrentTokenText("_")}?`
 
-# Sept. 05, 2024
+# Sep. 05, 2024
 - Type comment tokens are no longer generated.  
   Type comments will now be tokenized as plain comment tokens.  
   <br/><br/>

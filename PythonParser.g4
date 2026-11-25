@@ -20,18 +20,45 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
+
+
+
  /*
   * Project      : an ANTLR4 parser grammar for Python 3 programming language based on the official PEG grammar
-  *                https://github.com/RobEin/ANTLR4-parser-for-Python-3.14
+  *                https://github.com/RobEin/ANTLR4-parser-for-Python-3.15
   * Developed by : Robert Einhorn
   *
   */
 
-// Python 3.14.2  https://docs.python.org/3.14/reference/grammar.html#full-grammar-specification
+
+
+// Python 3.15.2  https://docs.python.org/3.15/reference/grammar.html#full-grammar-specification
 
 parser grammar PythonParser;
 
 options { tokenVocab=PythonLexer; }
+
+ /*
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * 
+  * The "STARTING RULES" also starts at line 63 in the original PEG parser grammar:
+  * https://docs.python.org/3/reference/grammar.html
+  * 
+  */
 
 // STARTING RULES
 // ==============
@@ -68,9 +95,9 @@ simple_stmts
 simple_stmt
     : assignment
     | type_alias
+    | import_stmt    
     | star_expressions
     | return_stmt
-    | import_stmt
     | raise_stmt
     | pass_stmt
     | del_stmt
@@ -126,6 +153,7 @@ raise_stmt
     : 'raise' (expression ('from' expression )?)?
     ;
 
+
 pass_stmt
     : 'pass';
 
@@ -144,7 +172,8 @@ del_stmt
 
 yield_stmt: yield_expr;
 
-assert_stmt: 'assert' expression (',' expression )?;
+assert_stmt
+    : 'assert' expression (',' expression )?;
 
 import_stmt
     : import_name
@@ -153,11 +182,17 @@ import_stmt
 // Import statements
 // -----------------
 
-import_name: 'import' dotted_as_names;
+import_name
+    : 'lazy'? 'import' dotted_as_names
+    ;
+
 // note below: the ('.' | '...') is necessary because '...' is tokenized as ELLIPSIS
 import_from
-    : 'from' ('.' | '...')* dotted_name 'import' import_from_targets
-    | 'from' ('.' | '...')+ 'import' import_from_targets;
+    : 'lazy'? 'from' ('.' | '...')* dotted_name 'import' import_from_targets
+    | 'lazy'? 'from' ('.' | '...')+ 'import' import_from_targets
+    ;
+
+
 import_from_targets
     : '(' import_from_as_names ','? ')'
     | import_from_as_names
@@ -396,12 +431,14 @@ complex_number
     ;
 
 signed_number
-    : '-'? NUMBER
+    : ('+' | '-')? NUMBER
     ;
 
+
 signed_real_number
-    : '-'? real_number
+    : ('+' | '-')? real_number
     ;
+
 
 real_number
     : NUMBER;
@@ -511,9 +548,12 @@ expressions
 
 
 expression
-    : disjunction ('if' disjunction 'else' expression)?
-    | lambdef
-    ;
+    : if_expression
+    | disjunction
+    | lambdef;
+
+if_expression
+    : disjunction 'if' disjunction 'else' expression;
 
 yield_expr
     : 'yield' ('from' expression | star_expressions?)
@@ -530,9 +570,14 @@ star_expression
 
 star_named_expressions: star_named_expression (',' star_named_expression)* ','?;
 
+ star_named_expressions_sequence: star_named_expression_sequence (',' star_named_expression_sequence)* ','?;
+
 star_named_expression
     : '*' bitwise_or
     | named_expression;
+
+star_named_expression_sequence
+    : star_named_expression;
 
 assignment_expression
     : name ':=' expression;
@@ -661,9 +706,9 @@ atom
     | 'None'
     | strings
     | NUMBER
-    | (tuple | group | genexp)
-    | (list | listcomp)
-    | (dict | set | dictcomp | setcomp)
+    | (genexp | tuple | group)
+    | (listcomp | list)
+    | (dictcomp | setcomp | dict | set)
     | '...';
 
 group
@@ -755,12 +800,12 @@ strings
     |tstring+;
 
 list
-    : '[' star_named_expressions? ']';
+    : '[' star_named_expressions_sequence? ']';
 
 tuple
-    : '(' (star_named_expression ',' star_named_expressions?  )? ')';
+    : '(' (star_named_expressions_sequence ',' star_named_expressions_sequence?  )? ')';
 
-set: LBRACE star_named_expressions RBRACE;
+set: LBRACE star_named_expressions_sequence RBRACE;
 
 // Dicts
 // -----
@@ -787,16 +832,17 @@ for_if_clause
     ;
 
 listcomp
-    : '[' named_expression for_if_clauses ']';
+    : '[' star_named_expression for_if_clauses ']';
 
 setcomp
-    : LBRACE named_expression for_if_clauses RBRACE;
+    : LBRACE star_named_expression for_if_clauses RBRACE;
 
 genexp
-    : '(' ( assignment_expression | expression) for_if_clauses ')';
+    : '(' ( assignment_expression | expression | starred_expression ) for_if_clauses ')';
 
 dictcomp
-    : LBRACE kvpair for_if_clauses RBRACE;
+    : LBRACE (kvpair | '**' expression) for_if_clauses RBRACE
+    ;
 
 // FUNCTION CALL ARGUMENTS
 // =======================
@@ -907,12 +953,13 @@ func_type_comment
     : NEWLINE TYPE_COMMENT   // Must be followed by indented block
     | TYPE_COMMENT;
 
-// *** related to soft keywords: https://docs.python.org/3.14/reference/lexical_analysis.html#soft-keywords
+// *** related to soft keywords: https://docs.python.org/3.15/reference/lexical_analysis.html#soft-keywords
 name_except_underscore
     : NAME // ***** The NAME token can be used only in this rule *****
     | NAME_OR_TYPE
     | NAME_OR_MATCH
     | NAME_OR_CASE
+    | NAME_OR_LAZY
     ;
 
 // ***** Always use the name rule instead of the NAME token in this grammar *****

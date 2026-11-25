@@ -1,10 +1,19 @@
 import org.antlr.v4.runtime.*;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -13,13 +22,13 @@ import java.util.regex.Pattern;
  * GRUN (Grammar Unit Test) for Python - Java 8 implementation
  */
 public class grun4py {
-    private static final String UTF8 = "utf-8";
+    private static final String DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
     private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
     private static final byte[] UTF32_BE_BOM = {0x00, 0x00, (byte) 0xFE, (byte) 0xFF};
     private static final byte[] UTF32_LE_BOM = {(byte) 0xFF, (byte) 0xFE, 0x00, 0x00};
     private static final byte[] UTF16_BE_BOM = {(byte) 0xFE, (byte) 0xFF};
     private static final byte[] UTF16_LE_BOM = {(byte) 0xFF, (byte) 0xFE};
-    private static final byte MAX_BOM_LENGTH = 4;
+    private static final int MAX_BOM_LENGTH = 4;
 
     private static final byte MAX_ASCII = 0x7f;
 
@@ -49,7 +58,7 @@ public class grun4py {
         // ASCII
         ENCODING_MAP.put("ascii", "us-ascii");
         ENCODING_MAP.put("usascii", "us-ascii");
-        ENCODING_MAP.put("ansiX341968", "us-ascii");
+        ENCODING_MAP.put("ansix341968", "us-ascii");
         ENCODING_MAP.put("cp367", "us-ascii");
         // Deprecated alias
         ENCODING_MAP.put("binary", "iso-8859-1");
@@ -57,18 +66,32 @@ public class grun4py {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Error: Please provide an input file path");
+            System.out.println(
+                "\n" +
+                "------------------------------\n" +
+                "USAGE:\n" +
+                "grun4py.jar filename.py\n" +
+                "\n" +
+                "------------------------------\n" +
+                "TOKEN OUTPUT FORMAT:\n" +
+                "[@TokenIndex,StartIndex:StopIndex='TokenText',<TokenName>,Channel,Line:Column]\n" +
+                "Channel is optional. Lines are 1-based; columns are 0-based.\n" +
+                "\n" +
+                "------------------------------"
+            );
+
             System.exit(1);
         }
 
-        final Path path = Paths.get(args[0]);
+        final Path filePath = Paths.get(args[0]);
 
         try {
-            final String encodingName = detectEncoding(path);
-            final CharStream input = CharStreams.fromPath(path, Charset.forName(encodingName));
+            final String sourceEncoding = detectEncoding(filePath);
+            final String text = readFileWithEncoding(filePath, sourceEncoding);
+            final CharStream input = CharStreams.fromString(text);
 
             final PythonLexer lexer = new PythonLexer(input);
-            lexer.setEncodingName(encodingName); // generate ENCODING token
+            lexer.setEncoding(sourceEncoding); // generate ENCODING token
 
             final CommonTokenStream tokens = new CommonTokenStream(lexer);
             final PythonParser parser = new PythonParser(tokens);
@@ -87,6 +110,27 @@ public class grun4py {
         }
     }
 
+    private static String readFileWithEncoding(final Path filePath, final String sourceEncoding) throws IOException {
+        // IMPORTANT: Decode the file using the detected source encoding before
+        // creating the ANTLR CharStream. This ensures that encoding errors are
+        // detected before lexical analysis and that the lexer receives decoded text.
+
+        try {
+            final CharsetDecoder decoder = Charset
+                                            .forName(sourceEncoding)
+                                            .newDecoder()
+                                            .onMalformedInput(CodingErrorAction.REPORT)
+                                            .onUnmappableCharacter(CodingErrorAction.REPORT);
+
+            final byte[] data = Files.readAllBytes(filePath);
+            return decoder.decode(ByteBuffer.wrap(data)).toString();
+        } catch (UnsupportedCharsetException | IllegalCharsetNameException | CharacterCodingException ex) {
+            throw new IOException("Failed to decode file with encoding '" + sourceEncoding + "': " + ex.getMessage()
+                                , ex);
+
+        }
+    }
+
     // ---------- Token formatting ----------
 
     private static String formatToken(final Token token) {
@@ -97,7 +141,7 @@ public class grun4py {
 
         final String channelName = token.getChannel() == Token.DEFAULT_CHANNEL
                                    ? ""
-                                   : String.format("channel=%d,", token.getChannel());
+                                   : String.format("channel=%s,", PythonLexer.channelNames[token.getChannel()]);
 
         return String.format("[@%d,%d:%d='%s',<%s>,%s%d:%d]",
                              token.getTokenIndex(),
@@ -120,24 +164,24 @@ public class grun4py {
 
     // ---------- Encoding detection ----------
 
-    private static String detectEncoding(final Path path) throws IOException {
-        final boolean hasUTF8BOM = detectUTF8BOM(path);
-        final String commentEncoding = detectEncodingFromComments(path, hasUTF8BOM);
-        return resolveFinalEncoding(path, hasUTF8BOM, commentEncoding);
+    private static String detectEncoding(final Path filePath) throws IOException {
+        final boolean hasUTF8BOM = detectBOM(filePath);
+        final String commentEncoding = detectEncodingFromComments(filePath, hasUTF8BOM);
+        return resolveFinalEncoding(filePath, hasUTF8BOM, commentEncoding);
     }
 
-    private static boolean detectUTF8BOM(final Path path) throws IOException {
+    private static boolean detectBOM(final Path filePath) throws IOException {
         final byte[] buffer = new byte[MAX_BOM_LENGTH];
         final int bytesRead;
-        try (InputStream stream = Files.newInputStream(path)) {
+        try (InputStream stream = Files.newInputStream(filePath)) {
             bytesRead = stream.read(buffer);
         }
 
         if (bufferStartsWith(buffer, bytesRead, UTF8_BOM)) return true;
-        if (bufferStartsWith(buffer, bytesRead, UTF32_BE_BOM)) throw bomError(path, "UTF-32 BE BOM");
-        if (bufferStartsWith(buffer, bytesRead, UTF32_LE_BOM)) throw bomError(path, "UTF-32 LE BOM");
-        if (bufferStartsWith(buffer, bytesRead, UTF16_BE_BOM)) throw bomError(path, "UTF-16 BE BOM");
-        if (bufferStartsWith(buffer, bytesRead, UTF16_LE_BOM)) throw bomError(path, "UTF-16 LE BOM");
+        if (bufferStartsWith(buffer, bytesRead, UTF32_BE_BOM)) throw bomError(filePath, "UTF-32 BE BOM");
+        if (bufferStartsWith(buffer, bytesRead, UTF32_LE_BOM)) throw bomError(filePath, "UTF-32 LE BOM");
+        if (bufferStartsWith(buffer, bytesRead, UTF16_BE_BOM)) throw bomError(filePath, "UTF-16 BE BOM");
+        if (bufferStartsWith(buffer, bytesRead, UTF16_LE_BOM)) throw bomError(filePath, "UTF-16 LE BOM");
         return false;
     }
 
@@ -150,13 +194,15 @@ public class grun4py {
         return true;
     }
 
-    private static IOException bomError(final Path path, final String msg) {
-        return new IOException("Invalid BOM encoding for '" + path.getFileName() + "': " + msg);
+    private static IOException bomError(final Path filePath, final String msg) {
+        return new IOException("Invalid BOM encoding for '" + filePath.getFileName() + "': " + msg);
     }
 
-    private static String detectEncodingFromComments(final Path path, final boolean hasUTF8BOM) throws IOException {
-        try (InputStream stream = Files.newInputStream(path)) {
-            if (hasUTF8BOM) stream.skip(UTF8_BOM.length);
+    private static String detectEncodingFromComments(final Path filePath, final boolean hasUTF8BOM) throws IOException {
+        try (InputStream stream = Files.newInputStream(filePath)) {
+            if (hasUTF8BOM) {
+                stream.read(); stream.read(); stream.read(); // 3 times or stream.skip(UTF8_BOM.length);
+            }
 
             for (int i = 0; i < 2; i++) {
                 final String line = readAsciiLine(stream);
@@ -196,27 +242,39 @@ public class grun4py {
         if (enc == null || enc.isEmpty()) return enc;
 
         final String normalized = enc
-                                  .toLowerCase()
+                                  .toLowerCase(Locale.ROOT)
                                   .replaceAll("[_\\-\\s]", "")
                                   .replaceAll("codec$", "");
 
         return ENCODING_MAP.getOrDefault(normalized, enc);
     }
 
-    private static String resolveFinalEncoding(final Path path,
-                                               final boolean hasUTF8_BOM,
-                                               final String commentEncodingName) throws IOException {
+    private static String resolveFinalEncoding(
+                                            final Path filePath,
+                                            final boolean hasUTF8BOM,
+                                            final String commentEncoding) throws IOException {
 
-        final boolean hasConflict = !commentEncodingName.isEmpty()
-                                    && hasUTF8_BOM
-                                    && !isUTF8(commentEncodingName);
+        final boolean hasConflict =
+                !commentEncoding.isEmpty()
+                && hasUTF8BOM
+                && !isUTF8(commentEncoding);
+
         if (hasConflict) {
-            throw new IOException("Encoding problem for '" + path.getFileName() + "': utf-8 BOM");
+            throw new IOException(
+                    "Encoding conflict for '" + filePath.getFileName() + "': UTF-8 BOM and encoding declaration '" + commentEncoding + "'");
         }
-        return commentEncodingName.isEmpty() ? UTF8 : commentEncodingName;
+
+        return commentEncoding.isEmpty()
+                    ? grun4py.DEFAULT_ENCODING
+                    : commentEncoding;
+
     }
 
     private static boolean isUTF8(final String enc) {
-        return enc.replaceAll("[\\-_]", "").toLowerCase().equals("utf8");
+        return enc
+                .replace("-", "")
+                .replace("_", "")
+                .equalsIgnoreCase("utf8");
+
     }
 }

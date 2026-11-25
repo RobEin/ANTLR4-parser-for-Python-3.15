@@ -23,12 +23,11 @@ class Encodings:
 
     MAX_ASCII = 0x7f
 
-
 class Grun4py:
-    UTF8 = Encodings.UTF8
-    ENCODING_REGEX = re.compile(r'^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)')
-    COMMENT_REGEX = re.compile(r'^[ \t\f]*(#.*)?$')
-    ENCODING_MAP = {
+    _DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING # Python 2 = ASCII, Python 3 = utf-8
+    _ENCODING_REGEX = re.compile(r'^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)')
+    _COMMENT_REGEX = re.compile(r'^[ \t\f]*(#.*)?$')
+    _ENCODING_MAP = {
         # UTF‑8
         "utf8sig": "utf-8",
         "utf8": "utf-8",
@@ -56,25 +55,37 @@ class Grun4py:
     @staticmethod
     def main(args):
         if len(args) < 1:
-            print("Error: Please provide an input file path", file=sys.stderr)
+            print(
+                "\n"
+                "------------------------------\n"
+                "USAGE:\n"
+                "python grun4py.py filename.py\n"
+                "\n"
+                "------------------------------\n"
+                "TOKEN OUTPUT FORMAT:\n"
+                "[@TokenIndex,StartIndex:StopIndex='TokenText',<TokenName>,Channel,Line:Column]\n"
+                "Channel is optional. Lines are 1-based; columns are 0-based.\n"
+                "\n"
+                "------------------------------\n"
+            )
             sys.exit(1)
 
-        file_path = args[0]
+        file_path = pathlib.Path(args[0])
 
         try:
-            encoding_name = Grun4py.detectEncoding(file_path)
-            text = Grun4py.readFileWithEncoding(file_path, encoding_name)
+            source_encoding = Grun4py.detect_encoding(file_path)
+            text = Grun4py.read_file_with_encoding(file_path, source_encoding)
             input_stream = InputStream(text)
 
             lexer = PythonLexer(input_stream)
-            lexer.set_encoding_name(encoding_name)  # generate ENCODING token
+            lexer.set_encoding(source_encoding)  # generate ENCODING token
 
             tokens = CommonTokenStream(lexer)
             parser = PythonParser(tokens)
 
             tokens.fill()
             for token in tokens.tokens:
-                print(Grun4py.formatToken(token))
+                print(Grun4py.format_token(token))
 
             parser.file_input()
             sys.exit(parser.getNumberOfSyntaxErrors())
@@ -83,37 +94,31 @@ class Grun4py:
             sys.exit(1)
 
     @staticmethod
-    def readFileWithEncoding(file_path, encoding_name):
-        if Grun4py.isUTF8(encoding_name):
-            # IMPORTANT: For UTF‑8, read the file directly as text using Python’s decoder.
-            # We have already performed BOM detection and encoding resolution ourselves,
-            # so we must not rely on FileStream or automatic decoding here.
-            # The ANTLR lexer expects a fully decoded Unicode string, and our own
-            # BOM + PEP 263 logic must take precedence over any runtime defaults.
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
-
-        with open(file_path, "rb") as f:
-            data = f.read()
+    def read_file_with_encoding(file_path, source_encoding):
+        # IMPORTANT: Decode the file using the detected source encoding before
+        # creating the ANTLR CharStream. This ensures that encoding errors are
+        # detected before lexical analysis and that the lexer receives decoded text.
 
         try:
-            return codecs.decode(data, encoding_name)
-        except Exception as ex:
-            raise RuntimeError(f"Failed to decode file with encoding '{encoding_name}': {ex}")
+            with open(file_path, "rb") as f:
+                data = f.read()
+            return codecs.decode(data, source_encoding)
+        except (LookupError, UnicodeDecodeError) as ex:
+            raise RuntimeError(f"Failed to decode file with encoding '{source_encoding}': {ex}") from ex
 
     # ---------- Token formatting ----------
 
     @staticmethod
-    def formatToken(token: Token) -> str:
-        token_text = Grun4py.escapeSpecialChars(token.text or "")
+    def format_token(token: Token) -> str:
+        token_text = Grun4py.escape_special_chars(token.text or "")
         token_name = "EOF" if token.type == Token.EOF else PythonLexer.symbolicNames[token.type]
 
-        channel_name = "" if token.channel == Token.DEFAULT_CHANNEL else f"channel={token.channel},"
+        channel_name = "" if token.channel == Token.DEFAULT_CHANNEL else f"channel={PythonLexer.channelNames[token.channel]},"
 
         return f"[@{token.tokenIndex},{token.start}:{token.stop}='{token_text}',<{token_name}>,{channel_name}{token.line}:{token.column}]"
 
     @staticmethod
-    def escapeSpecialChars(text: str) -> str:
+    def escape_special_chars(text: str) -> str:
         return (
                 text
                 .replace("\n", "\\n")
@@ -125,47 +130,47 @@ class Grun4py:
     # ---------- Encoding detection ----------
 
     @staticmethod
-    def detectEncoding(file_path: str) -> str:
-        has_utf8_bom = Grun4py.detectUTF8BOM(file_path)
-        comment_enc = Grun4py.detectEncodingFromComments(file_path, has_utf8_bom)
-        return Grun4py.resolveFinalEncoding(file_path, has_utf8_bom, comment_enc)
+    def detect_encoding(file_path: str) -> str:
+        has_utf8_bom = Grun4py.detect_bom(file_path)
+        comment_enc = Grun4py.detect_encoding_from_comments(file_path, has_utf8_bom)
+        return Grun4py.resolve_final_encoding(file_path, has_utf8_bom, comment_enc)
 
     @staticmethod
-    def detectUTF8BOM(file_path: str) -> bool:
+    def detect_bom(file_path: str) -> bool:
         with open(file_path, "rb") as f:
             header = f.read(Encodings.MAX_BOM_LENGTH)
 
         if header.startswith(Encodings.UTF8_BOM):
             return True
         if header.startswith(Encodings.UTF32_BE_BOM):
-            raise Grun4py.bomError(file_path, "UTF-32 BE BOM")
+            raise Grun4py.bom_error(file_path, "UTF-32 BE BOM")
         if header.startswith(Encodings.UTF32_LE_BOM):
-            raise Grun4py.bomError(file_path, "UTF-32 LE BOM")
+            raise Grun4py.bom_error(file_path, "UTF-32 LE BOM")
         if header.startswith(Encodings.UTF16_BE_BOM):
-            raise Grun4py.bomError(file_path, "UTF-16 BE BOM")
+            raise Grun4py.bom_error(file_path, "UTF-16 BE BOM")
         if header.startswith(Encodings.UTF16_LE_BOM):
-            raise Grun4py.bomError(file_path, "UTF-16 LE BOM")
+            raise Grun4py.bom_error(file_path, "UTF-16 LE BOM")
 
         return False
 
     @staticmethod
-    def bomError(file_path: str, msg: str) -> Exception:
+    def bom_error(file_path: str, msg: str) -> Exception:
         return RuntimeError(f"Invalid BOM encoding for '{pathlib.Path(file_path).name}': {msg}")
 
     @staticmethod
-    def detectEncodingFromComments(file_path: str, has_utf8_bom: bool) -> str:
+    def detect_encoding_from_comments(file_path: str, has_utf8_bom: bool) -> str:
         with open(file_path, "rb") as f:
             start_pos = len(Encodings.UTF8_BOM) if has_utf8_bom else 0
             if start_pos:
                 f.seek(start_pos)
 
             for _ in range(2):
-                line = Grun4py.readAsciiLine(f)
+                line = Grun4py.read_ascii_line(f)
                 if line is None:
                     return ""
 
-                if Grun4py.COMMENT_REGEX.match(line):
-                    enc = Grun4py.extractEncodingFromLine(line)
+                if Grun4py._COMMENT_REGEX.match(line):
+                    enc = Grun4py.extract_encoding_from_line(line)
                     if enc:
                         return enc  # encoding found in comment
                 else:
@@ -174,7 +179,7 @@ class Grun4py:
         return ""
 
     @staticmethod
-    def readAsciiLine(f) -> str | None:
+    def read_ascii_line(f) -> str | None:
         lineBuilder = []
         while True:
             buff = f.read(1)
@@ -192,14 +197,14 @@ class Grun4py:
         return "".join(lineBuilder)
 
     @staticmethod
-    def extractEncodingFromLine(line: str) -> str:
-        m = Grun4py.ENCODING_REGEX.match(line)
+    def extract_encoding_from_line(line: str) -> str:
+        m = Grun4py._ENCODING_REGEX.match(line)
         if not m or not m.group(1):
             return ""
-        return Grun4py.normalizeEncoding(m.group(1))
+        return Grun4py.normalize_encoding(m.group(1))
 
     @staticmethod
-    def normalizeEncoding(enc: str) -> str:
+    def normalize_encoding(enc: str) -> str:
         if not enc:
             return enc
 
@@ -211,25 +216,25 @@ class Grun4py:
             .removesuffix("codec")
         )
 
-        return Grun4py.ENCODING_MAP.get(normalized, enc)
+        return Grun4py._ENCODING_MAP.get(normalized, enc)
 
     @staticmethod
-    def resolveFinalEncoding(file_path: str, has_utf8_bom: bool, comment_encoding: str) -> str:
+    def resolve_final_encoding(file_path: str, has_utf8_bom: bool, comment_encoding: str) -> str:
         has_conflict = (
             comment_encoding
             and has_utf8_bom
-            and not Grun4py.isUTF8(comment_encoding)
+            and not Grun4py.is_utf8(comment_encoding)
         )
 
         if has_conflict:
             raise RuntimeError(
-                f"Encoding problem for '{pathlib.Path(file_path).name}': {Grun4py.UTF8} BOM"
+                f"Encoding problem for '{pathlib.Path(file_path).name}': {Grun4py._DEFAULT_ENCODING} BOM"
             )
 
-        return comment_encoding or Grun4py.UTF8
+        return comment_encoding or Grun4py._DEFAULT_ENCODING
 
     @staticmethod
-    def isUTF8(enc: str) -> bool:
+    def is_utf8(enc: str) -> bool:
         return enc.replace("-", "").replace("_", "").lower() == "utf8"
 
 

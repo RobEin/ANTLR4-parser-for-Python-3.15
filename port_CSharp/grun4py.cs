@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 public class Grun4py
 {
-    private const string UTF8 = "utf-8";
+    private static readonly string DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
     private static readonly byte[] UTF8_BOM = [0xEF, 0xBB, 0xBF];
     private static readonly byte[] UTF32_BE_BOM = [0x00, 0x00, 0xFE, 0xFF];
     private static readonly byte[] UTF32_LE_BOM = [0xFF, 0xFE, 0x00, 0x00];
@@ -43,7 +43,7 @@ public class Grun4py
         // ASCII
         { "ascii", "us-ascii" },
         { "usascii", "us-ascii" },
-        { "ansiX341968", "us-ascii" },
+        { "ansix341968", "us-ascii" },
         { "cp367", "us-ascii" },
         // Deprecated alias
         { "binary", "iso-8859-1" },
@@ -51,20 +51,38 @@ public class Grun4py
 
     public static int Main(string[] args)
     {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Enable support for legacy code-page encodings (e.g. KOI8-R)
+
         if (args.Length < 1)
         {
-            Console.Error.WriteLine("Error: Please provide an input file path");
+            Console.WriteLine(
+                "\n" +
+                "------------------------------\n" +
+                "USAGE:\n" +
+                "grun4py.exe filename.py\n" +
+                "or\n" +
+                "dotnet run filename.py\n" +
+                "\n" +
+                "------------------------------\n" +
+                "TOKEN OUTPUT FORMAT:\n" +
+                "[@TokenIndex,StartIndex:StopIndex='TokenText',<TokenName>,Channel,Line:Column]\n" +
+                "Channel is optional. Lines are 1-based; columns are 0-based.\n" +
+                "\n" +
+                "------------------------------"
+            );
             return 1;
         }
 
         string filePath = args[0];
+
         try
         {
-            string encodingName = DetectEncoding(filePath);
-            var input = CharStreams.fromPath(filePath, Encoding.GetEncoding(encodingName));
+            var sourceEncoding = DetectEncoding(filePath);
+            var text = ReadFileWithEncoding(filePath, sourceEncoding);
+            var input = CharStreams.fromString(text);
 
             PythonLexer lexer = new(input);
-            lexer.SetEncodingName(encodingName); // generate ENCODING token
+            lexer.SetEncoding(sourceEncoding); // generate ENCODING token
 
             CommonTokenStream tokens = new(lexer);
             PythonParser parser = new(tokens);
@@ -86,6 +104,29 @@ public class Grun4py
         }
     }
 
+    private static string ReadFileWithEncoding(string filePath, string sourceEncoding)
+    {
+        // IMPORTANT: Decode the file using the detected source encoding before
+        // creating the ANTLR CharStream. This ensures that encoding errors are
+        // detected before lexical analysis and that the lexer receives decoded text.
+
+        try
+        {
+            var sourceTextEncoding = Encoding.GetEncoding(sourceEncoding
+                                                        , EncoderFallback.ExceptionFallback
+                                                        , DecoderFallback.ExceptionFallback);
+
+            var bytes = File.ReadAllBytes(filePath);
+            return sourceTextEncoding.GetString(bytes);
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex is DecoderFallbackException)
+        {
+            throw new IOException($"Failed to decode file with encoding '{sourceEncoding}': {ex.Message}"
+                                , ex);
+
+        }
+    }
+
     // ---------- Token formatting ----------
 
     private static string FormatToken(IToken token)
@@ -96,8 +137,8 @@ public class Grun4py
             : PythonLexer.DefaultVocabulary.GetSymbolicName(token.Type);
 
         var channelName = token.Channel == TokenConstants.DefaultChannel
-            ? ""
-            : $"channel={token.Channel},";
+			? ""
+			: $"channel={PythonLexer.channelNames[token.Channel]},";
 
         return $"[@{token.TokenIndex},{token.StartIndex}:{token.StopIndex}='{tokenText}',<{tokenName}>,{channelName}{token.Line}:{token.Column}]";
     }
@@ -115,12 +156,12 @@ public class Grun4py
 
     private static string DetectEncoding(string filePath)
     {
-        bool hasUTF8BOM = DetectUTF8BOM(filePath);
+        bool hasUTF8BOM = DetectBOM(filePath);
         string commentEncoding = DetectEncodingFromComments(filePath, hasUTF8BOM);
         return ResolveFinalEncoding(filePath, hasUTF8BOM, commentEncoding);
     }
 
-    private static bool DetectUTF8BOM(string filePath)
+    private static bool DetectBOM(string filePath)
     {
         byte[] buffer = new byte[MAX_BOM_LENGTH];
         using FileStream stream = File.OpenRead(filePath);
@@ -202,11 +243,15 @@ public class Grun4py
         if (string.IsNullOrEmpty(enc)) return enc;
 
         string normalized = enc
-            .ToLower()
+            .ToLowerInvariant()
             .Replace("_", "")
             .Replace("-", "")
-            .Replace(" ", "")
-            .RegexReplace(@"codec$", "");
+            .Replace(" ", "");
+
+        if (normalized.EndsWith("codec", StringComparison.Ordinal))
+        {
+            normalized = normalized[..^5];
+        }
 
         return ENCODING_MAP.TryGetValue(normalized, out var value)
              ? value
@@ -215,29 +260,23 @@ public class Grun4py
 
     private static string ResolveFinalEncoding(string filePath,
                                                bool hasUTF8_BOM,
-                                               string commentEncodingName)
+                                               string commentEncoding)
     {
-        bool hasConflict = !string.IsNullOrEmpty(commentEncodingName)
+        bool hasConflict = !string.IsNullOrEmpty(commentEncoding)
                            && hasUTF8_BOM
-                           && !IsUTF8(commentEncodingName);
+                           && !IsUTF8(commentEncoding);
         if (hasConflict)
         {
-            throw new IOException($"Encoding problem for '{Path.GetFileName(filePath)}': utf-8 BOM");
+            throw new IOException($"Encoding conflict for '{Path.GetFileName(filePath)}': " + $"UTF-8 BOM and encoding declaration '{commentEncoding}'");
         }
-        return string.IsNullOrEmpty(commentEncodingName) ? UTF8 : commentEncodingName;
+        return string.IsNullOrEmpty(commentEncoding) ? Grun4py.DEFAULT_ENCODING : commentEncoding;
     }
 
     private static bool IsUTF8(string enc)
     {
-        return enc.Replace("-", "").Replace("_", "").Equals("utf8", StringComparison.CurrentCultureIgnoreCase);
-    }
-}
-
-// Extension method for regex replacement
-public static class StringExtensions
-{
-    public static string RegexReplace(this string input, string pattern, string replacement)
-    {
-        return Regex.Replace(input, pattern, replacement);
+        return enc
+                .Replace("-", "")
+                .Replace("_", "")
+                .Equals("utf8", StringComparison.OrdinalIgnoreCase);
     }
 }

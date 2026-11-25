@@ -1,1 +1,1 @@
-template = t"Hello {name}"
+lazy import json

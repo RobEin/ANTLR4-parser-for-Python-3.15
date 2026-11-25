@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import iconv from "iconv-lite";
+import { TextDecoder } from 'util';
 
 import { CharStreams, CommonTokenStream, Token } from "antlr4";
 import PythonLexer from "./PythonLexer";
@@ -45,7 +46,7 @@ class Grun4py {
         // ASCII
         ascii: "ascii",
         usascii: "ascii",
-        ansiX341968: "ascii",
+        ansix341968: "ascii",
         cp367: "ascii",
         // Deprecated alias
         binary: "latin-1",
@@ -53,19 +54,32 @@ class Grun4py {
 
     static main(args: string[]): void {
         if (args.length < 1) {
-            console.error("Error: Please provide an input file path");
+            console.log(
+                "\n" +
+                "------------------------------\n" +
+                "USAGE:\n" +
+                "npx tsx grun4py.ts filename.py\n" +
+                "\n" +
+                "------------------------------\n" +
+                "TOKEN OUTPUT FORMAT:\n" +
+                "[@TokenIndex,StartIndex:StopIndex='TokenText',<TokenName>,Channel,Line:Column]\n" +
+                "Channel is optional. Lines are 1-based; columns are 0-based.\n" +
+                "\n" +                
+                "------------------------------"
+            );
+
             process.exit(1);
         }
 
         const filePath = args[0]!;
 
         try {
-            const encodingName = this.detectEncoding(filePath);
-            const text = this.readFileWithEncoding(filePath, encodingName);
+            const sourceEncoding = this.detectEncoding(filePath);
+            const text = this.readFileWithEncoding(filePath, sourceEncoding);
             const input = CharStreams.fromString(text);
 
             const lexer = new PythonLexer(input);
-            lexer.setEncodingName(encodingName); // generate ENCODING token
+            lexer.setEncoding(sourceEncoding); // generate ENCODING token
 
             const tokens = new CommonTokenStream(lexer);
             const parser = new PythonParser(tokens);
@@ -78,31 +92,25 @@ class Grun4py {
             parser.file_input();
             process.exit(parser.syntaxErrorsCount);
         } catch (ex) {
-            console.error(
-                "Error: " + (ex instanceof Error ? ex.message : String(ex)),
-            );
+            console.error("Error: " + (ex instanceof Error ? ex.message : String(ex)),);
             process.exit(1);
         }
     }
 
-    private static readFileWithEncoding(filePath: string, encodingName: string): string {
-        if (this.isUTF8(encodingName)) {
-            // IMPORTANT: Read UTF‑8 files as text, not raw bytes.
-            // The ANTLR4 JavaScript runtime only accepts UTF‑16 JS strings
-            // and does NOT decode UTF‑8 byte sequences internally.
-            // Passing a Buffer would split non‑BMP characters (surrogate pairs)
-            // into two code units, causing incorrect tokenization.
-            return fs.readFileSync(filePath, this.UTF8);
-        }
+    private static readFileWithEncoding(filePath: string, sourceEncoding: string,): string {
+        // IMPORTANT: Decode the file using the detected source encoding before
+        // creating the ANTLR CharStream. This ensures that encoding errors are
+        // detected before lexical analysis and that the lexer receives decoded text.
 
-        const buffer = fs.readFileSync(filePath);
         try {
-            return iconv.decode(buffer, encodingName);
+            const buffer = fs.readFileSync(filePath);
+            if (this.isUTF8(sourceEncoding)) {
+                const decoder = new TextDecoder('utf-8', { fatal: true });
+                return decoder.decode(buffer);
+            }
+            return iconv.decode(buffer, sourceEncoding);
         } catch (ex) {
-            throw new Error(
-                `Failed to decode file with encoding '${encodingName}': ${ex instanceof Error ? ex.message : String(ex)
-                }`,
-            );
+            throw new Error(`Failed to decode file with encoding '${sourceEncoding}': ${ex instanceof Error ? ex.message : String(ex)}`,{ cause: ex },);
         }
     }
 
@@ -116,7 +124,7 @@ class Grun4py {
 
         const channelName = token.channel === Token.DEFAULT_CHANNEL
             ? ""
-            : `channel=${token.channel},`;
+            : `channel=${PythonLexer.channelNames[token.channel]},`; // `channel=${token.channel},`;
 
         return `[@${token.tokenIndex},${token.start}:${token.stop}='${tokenText}',<${tokenName}>,${channelName}${token.line}:${token.column}]`;
     }
@@ -132,12 +140,12 @@ class Grun4py {
     // ---------- Encoding detection ----------
 
     private static detectEncoding(filePath: string): string {
-        const hasUTF8BOM = this.detectUTF8BOM(filePath);
+        const hasUTF8BOM = this.detectBOM(filePath);
         const commentEnc = this.detectEncodingFromComments(filePath, hasUTF8BOM);
         return this.resolveFinalEncoding(filePath, hasUTF8BOM, commentEnc);
     }
 
-    private static detectUTF8BOM(filePath: string): boolean {
+    private static detectBOM(filePath: string): boolean {
         const buffer = Buffer.alloc(Encodings.MAX_BOM_LENGTH);
         const fd = fs.openSync(filePath, "r");
 
@@ -222,16 +230,16 @@ class Grun4py {
         return this.ENCODING_MAP[normalized] ?? enc;
     }
 
-    private static resolveFinalEncoding(filePath: string, hasUTF8BOM: boolean, commentEncodingName: string,): string {
-        const hasConflict = commentEncodingName
+    private static resolveFinalEncoding(filePath: string, hasUTF8BOM: boolean, commentEncoding: string,): string {
+        const hasConflict = commentEncoding
             && hasUTF8BOM
-            && !this.isUTF8(commentEncodingName);
+            && !this.isUTF8(commentEncoding);
 
         if (hasConflict) {
-            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${this.UTF8} BOM`,);
+            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${Encodings.UTF8} BOM`,);
         }
 
-        return commentEncodingName || this.UTF8;
+        return commentEncoding || Encodings.UTF8;
     }
 
     private static isUTF8(enc: string): boolean {

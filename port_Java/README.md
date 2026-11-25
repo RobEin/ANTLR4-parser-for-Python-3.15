@@ -23,7 +23,7 @@ Windows:
 antlr4 PythonLexer.g4
 antlr4 PythonParser.g4
 javac *.java
-java grun4py.java example.py
+java grun4py example.py
 grun Python file_input -gui example.py
 ```
 
