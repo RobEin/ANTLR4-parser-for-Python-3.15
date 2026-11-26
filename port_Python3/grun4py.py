@@ -186,13 +186,10 @@ class Grun4py:
             if not buff:
                 break
 
-            ascii = buff[0]
-            if ascii > Encodings.MAX_ASCII:
-                return None
-            if ascii == ord("\n"):
-                break
-            if ascii != ord("\r"):
-                lineBuilder.append(chr(ascii))
+            byte_value = buff[0]
+            if byte_value > Encodings.MAX_ASCII: return None
+            if byte_value == ord("\n"): break
+            if byte_value != ord("\r"): lineBuilder.append(chr(byte_value))
 
         return "".join(lineBuilder)
 

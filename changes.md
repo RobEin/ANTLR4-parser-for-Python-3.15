@@ -16,14 +16,14 @@
 - moved encoding detection from PythonLexerBase to a separate component (grun4py)
 
 # Jan. 07, 2025
-- parser grammar update for Python 3.13.1<br/><br/>
-- added ENCODING token<br/><br/>
+- parser grammar update for Python 3.13.1
+- added ENCODING token
 - complete rewrite of fstring tokenizer in lexer grammar and PythonLexerBase class
     - now correctly tokenizes the followings in fstring:
         - escape sequences
         - walrus operator
         - dictionary comprehension
-        - set comprehension<br/><br/>
+        - set comprehension
 - soft keywords changes:
     - no embedded code (semantic predicates) in parser grammar for soft keywords
     - no need for PythonParserBase class
@@ -42,6 +42,6 @@
 # Sep. 05, 2024
 - Type comment tokens are no longer generated.  
   Type comments will now be tokenized as plain comment tokens.  
-  <br/><br/>
+  
 - Line continuation for string literals (backslash followed by a newline) is no longer resolved.  
   (backslash+newline is no longer removed from string literals)

@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 /// <summary>
 /// GRUN (Grammar Unit Test) for Python
 /// </summary>
-public class Grun4py
+public static class Grun4py
 {
     private static readonly string DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
     private static readonly byte[] UTF8_BOM = [0xEF, 0xBB, 0xBF];

@@ -24,37 +24,41 @@ const Encodings = {
     MAX_ASCII: 0x7f,
 };
 
-class Grun4py {
-    static DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
-    static ENCODING_REGEX = /^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)/;
-    static COMMENT_REGEX = /^[ \t\f]*(#.*)?$/;
+const Grun4py = class {
+    DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
+    ENCODING_REGEX = /^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)/;
+    COMMENT_REGEX = /^[ \t\f]*(#.*)?$/;
 
-    static ENCODING_MAP = {
+    ENCODING_MAP = new Map([
         // UTF‑8
-        utf8sig: "utf-8",
-        utf8: "utf-8",
-        utf: "utf-8",
-        // UTF‑16 LE
-        utf16le: "utf-16-le",
-        utf16: "utf-16-le",
-        ucs2: "utf-16-le",
-        ucs2le: "utf-16-le",
-        // ISO‑8859‑1 / Latin‑1
-        latin1: "latin-1",
-        latin: "latin-1",
-        iso88591: "latin-1",
-        iso8859: "latin-1",
-        cp819: "latin-1",
-        // ASCII
-        ascii: "ascii",
-        usascii: "ascii",
-        ansix341968: "ascii",
-        cp367: "ascii",
-        // Deprecated alias
-        binary: "latin-1",
-    };
+        ["utf8sig", "utf-8"],
+        ["utf8", "utf-8"],
+        ["utf", "utf-8"],
 
-    static main(args) {
+        // UTF‑16 LE
+        ["utf16le", "utf-16-le"],
+        ["utf16", "utf-16-le"],
+        ["ucs2", "utf-16-le"],
+        ["ucs2le", "utf-16-le"],
+
+        // ISO‑8859‑1 / Latin‑1
+        ["latin1", "latin-1"],
+        ["latin", "latin-1"],
+        ["iso88591", "latin-1"],
+        ["iso8859", "latin-1"],
+        ["cp819", "latin-1"],
+
+        // ASCII
+        ["ascii", "ascii"],
+        ["usascii", "ascii"],
+        ["ansix341968", "ascii"],
+        ["cp367", "ascii"],
+
+        // Deprecated alias
+        ["binary", "latin-1"],
+    ]);
+
+    main(args) {
         if (args.length < 1) {
             console.log(
                 "\n" +
@@ -99,7 +103,7 @@ class Grun4py {
         }
     }
 
-    static readFileWithEncoding(filePath, sourceEncoding) {
+    readFileWithEncoding(filePath, sourceEncoding) {
         // IMPORTANT: Decode the file using the detected source encoding before
         // creating the ANTLR CharStream. This ensures that encoding errors are
         // detected before lexical analysis and that the lexer receives decoded text.
@@ -118,8 +122,8 @@ class Grun4py {
 
     // ---------- Token formatting ----------
 
-    static formatToken(token) {
-        const tokenText = this.escapeSpecialChars(token.text ?? "");
+    formatToken(token) {
+        const tokenText = this.escapeSpecialChars(token.text);
         const tokenName =
             token.type === Token.EOF
                 ? "EOF"
@@ -133,7 +137,7 @@ class Grun4py {
         return `[@${token.tokenIndex},${token.start}:${token.stop}='${tokenText}',<${tokenName}>,${channelName}${token.line}:${token.column}]`;
     }
 
-    static escapeSpecialChars(text) {
+    escapeSpecialChars(text) {
         return text
             .replace(/\n/g, "\\n")
             .replace(/\r/g, "\\r")
@@ -143,13 +147,13 @@ class Grun4py {
 
     // ---------- Encoding detection ----------
 
-    static detectEncoding(filePath) {
+    detectEncoding(filePath) {
         const hasUTF8BOM = this.detectBOM(filePath);
         const commentEnc = this.detectEncodingFromComments(filePath, hasUTF8BOM);
         return this.resolveFinalEncoding(filePath, hasUTF8BOM, commentEnc);
     }
 
-    static detectBOM(filePath) {
+    detectBOM(filePath) {
         const buffer = Buffer.alloc(Encodings.MAX_BOM_LENGTH);
         const fd = fs.openSync(filePath, "r");
 
@@ -166,18 +170,19 @@ class Grun4py {
         }
     }
 
-    static bufferStartsWith(buffer, bytesRead, prefix) {
+    bufferStartsWith(buffer, bytesRead, prefix) {
         if (bytesRead < prefix.length) return false;
-        return prefix.every((byte, i) => buffer[i] === byte);
+
+        return buffer.subarray(0, prefix.length).equals(Buffer.from(prefix));
     }
 
-    static bomError(filePath, msg) {
+    bomError(filePath, msg) {
         return new Error(
             `Invalid BOM encoding for '${path.basename(filePath)}': ${msg}`
         );
     }
 
-    static detectEncodingFromComments(filePath, hasUTF8BOM) {
+    detectEncodingFromComments(filePath, hasUTF8BOM) {
         const fd = fs.openSync(filePath, "r");
         const startPos = hasUTF8BOM ? Encodings.UTF8_BOM.length : 0;
 
@@ -203,7 +208,7 @@ class Grun4py {
         }
     }
 
-    static readAsciiLine(fd) {
+    readAsciiLine(fd) {
         const buf = Buffer.alloc(1);
         const lineBuilder = [];
         while (fs.readSync(fd, buf, 0, 1, null) !== 0) {
@@ -215,13 +220,13 @@ class Grun4py {
         return lineBuilder.join("");
     }
 
-    static extractEncodingFromLine(line) {
+    extractEncodingFromLine(line) {
         const match = line.match(this.ENCODING_REGEX);
         if (!match?.[1]) return "";
         return this.normalizeEncoding(match[1]);
     }
 
-    static normalizeEncoding(enc) {
+    normalizeEncoding(enc) {
         if (!enc) return enc;
 
         const normalized = enc
@@ -229,10 +234,10 @@ class Grun4py {
             .replace(/[_\-\s]/g, "")
             .replace(/codec$/, "");
 
-        return this.ENCODING_MAP[normalized] ?? enc;
+        return this.ENCODING_MAP.get(normalized) ?? enc;
     }
 
-    static resolveFinalEncoding(filePath, hasUTF8BOM, commentEncoding) {
+    resolveFinalEncoding(filePath, hasUTF8BOM, commentEncoding) {
         const hasConflict =
             commentEncoding &&
             hasUTF8BOM &&
@@ -247,10 +252,12 @@ class Grun4py {
         return commentEncoding || this.DEFAULT_ENCODING;
     }
 
-    static isUTF8(enc) {
+    isUTF8(enc) {
         return enc.replace(/[-_]/g, "").toLowerCase() === "utf8";
     }
-}
+};
 
 // Entry point
-Grun4py.main(process.argv.slice(2));
+const grun4py = new Grun4py();
+grun4py.main(process.argv.slice(2));
+

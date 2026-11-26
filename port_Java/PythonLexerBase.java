@@ -30,6 +30,8 @@ THE SOFTWARE.
 
 // ****  Implemented in Java 8 for compatibility with ANTLR4 Java runtime ****
 
+package io.github.robein.pythonparser;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -708,7 +710,7 @@ public abstract class PythonLexerBase extends Lexer {
                 break;
             case PythonLexer.RBRACE:
                 // only when the previous brace expression is not a dictionary comprehension or set comprehension
-                if (!isValid_DictionaryOrSet_ComprehensionExpression(this.lastClosedBraceExpression)) {
+                if (!isValid_DictionaryOr_SetComprehension_Expression(this.lastClosedBraceExpression)) {
                     this.createAndAddPendingToken(this.laToken, this.activeInterpolatedStringMiddleTokenType, "");
                 }
                 break;
@@ -720,7 +722,7 @@ public abstract class PythonLexerBase extends Lexer {
     // Determines whether the collected brace expression forms a dictionary or set
     // comprehension. Used to enforce Python’s rule that outermost f-string brace
     // expressions cannot be comprehensions.
-    private static boolean isValid_DictionaryOrSet_ComprehensionExpression(final String code) {
+    private static boolean isValid_DictionaryOr_SetComprehension_Expression(final String code) {
         final CharStream inputStream = CharStreams.fromString(code);
         final PythonLexer lexer = new PythonLexer(inputStream);
         final CommonTokenStream tokenStream = new CommonTokenStream(lexer);

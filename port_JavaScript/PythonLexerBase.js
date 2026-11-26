@@ -30,7 +30,7 @@ THE SOFTWARE.
 
 'use strict';
 
-import { CharStreams, CommonTokenStream, Token, CommonToken, Lexer } from "antlr4";
+import { CharStreams, CommonTokenStream, Token, Lexer } from "antlr4";
 import PythonLexer from "./PythonLexer.js";
 import PythonParser from "./PythonParser.js";
 
@@ -226,7 +226,7 @@ export default class PythonLexerBase extends Lexer {
     #insertLeadingIndentToken() {
         if (this.#previousPendingTokenType === PythonLexer.WS) {
             const prevToken = this.#pendingTokenQueue.at(-1); /* stack peek */ // WS token
-            const [length, altLength] = this.#getIndentationLength(prevToken.text);
+            const length = this.#getIndentationLength(prevToken.text);
             if (length !== 0) { // there is an "indentation" before the first statement
                 const errMsg = "first statement indented";
                 this.#reportLexerError(errMsg);
@@ -397,27 +397,26 @@ export default class PythonLexerBase extends Lexer {
     }
 
     #appendToBraceExpression(text) {
-        const lastIndex = this.#braceExpressionStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#braceExpressionStack.length === 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.#curToken.line})`);
 
-        this.#braceExpressionStack[lastIndex] += text;
+        const top = this.#braceExpressionStack.pop();
+        this.#braceExpressionStack.push(top + text);
     }
 
     #incrementBraceDepth() { // increment the last element (stack peek + 1)
-        const lastIndex = this.#parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.#curToken.line})`);
+        if (this.#parenOrBracketOpenedStack.length === 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.#curToken.line})`);
 
-        this.#parenOrBracketOpenedStack[lastIndex]++;
+        const top = this.#parenOrBracketOpenedStack.pop();
+        this.#parenOrBracketOpenedStack.push(top + 1);
     }
 
     #decrementBraceDepth() { // decrement the last element (stack peek - 1)
-        const lastIndex = this.#parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#parenOrBracketOpenedStack.length === 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.#curToken.line})`);
 
-        const top = this.#parenOrBracketOpenedStack[lastIndex];
+        const top = this.#parenOrBracketOpenedStack.pop();
         if (top <= 0) throw new Error(`Cannot decrement brace depth: depth is already zero. (detected at line ${this.#curToken.line})`);
 
-        this.#parenOrBracketOpenedStack[lastIndex] = top - 1;
+        this.#parenOrBracketOpenedStack.push(top - 1);
     }
 
     #setLexerModeAfterRBRACEtoken() {
@@ -601,8 +600,8 @@ export default class PythonLexerBase extends Lexer {
         this.#lastClosedBraceExpression = parentBraceExpression + "}";
         if (this.#braceExpressionStack.length > 0) {
             // Extend the current brace expression by adding the previous expression
-            const lastIndex = this.#braceExpressionStack.length - 1;
-            this.#braceExpressionStack[lastIndex] += this.#lastClosedBraceExpression;
+            const parentBraceExpression = this.#braceExpressionStack.pop();
+            this.#braceExpressionStack.push(parentBraceExpression + this.#lastClosedBraceExpression);
         }
     }
 
@@ -789,7 +788,7 @@ export default class PythonLexerBase extends Lexer {
         token.type = tokenType;
         token.channel = Token.DEFAULT_CHANNEL;
         token.stop = originalToken.start - 1;
-        token.text = tokenText ?? `<${PythonLexer.symbolicNames[tokenType] ?? ""}>`;
+        token.text = tokenText ?? `<${PythonLexer.symbolicNames.at(tokenType) ?? ""}>`;
 
         this.#addPendingToken(token);
     }

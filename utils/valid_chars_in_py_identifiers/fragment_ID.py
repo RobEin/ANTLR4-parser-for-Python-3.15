@@ -11,7 +11,7 @@ def main() -> None:
     """Generate and save ANTLR4 ID_START and ID_CONTINUE fragments."""
     print("main")
     python_version = f"for Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    
+
     start_codes = []
     continue_codes = []
 

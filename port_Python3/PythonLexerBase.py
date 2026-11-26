@@ -25,7 +25,7 @@
 # Developed by : Robert Einhorn
 
 from collections import deque
-from typing import Literal, TextIO, Optional
+from typing import TextIO, Optional
 from antlr4 import InputStream, Lexer, Token
 from antlr4.Token import CommonToken
 import sys
@@ -136,7 +136,7 @@ class PythonLexerBase(Lexer):
         # - insert ENCODING token (if any)
         # - hide leading NEWLINE(s)
         # - insert leading INDENT if first statement is indented
-        
+
         # The initial indentation length is never popped.
         self._indentation_length_stack.append(0)
 
@@ -303,7 +303,7 @@ class PythonLexerBase(Lexer):
 
     def _append_to_brace_expression(self, text: str) -> None:
         if not self._brace_expression_stack:
-                raise RuntimeError(f"Cannot append to brace expression: stack is empty. (detected at line {self._cur_token.line})")
+            raise RuntimeError(f"Cannot append to brace expression: stack is empty. (detected at line {self._cur_token.line})")
 
         self._brace_expression_stack[-1] += text
 
@@ -642,7 +642,12 @@ class PythonLexerBase(Lexer):
     # parser receives accurate context for recovery.
 
     def _report_lexer_error(self, err_msg: str) -> None:
-        self.getErrorListenerDispatch().syntaxError(self, self._cur_token.type, self._cur_token.line, self._cur_token.column, " LEXER" + PythonLexerBase._ERR_TXT + err_msg, None)
+        self.getErrorListenerDispatch().syntaxError(self, 
+                                                    self._cur_token.type, 
+                                                    self._cur_token.line, 
+                                                    self._cur_token.column, 
+                                                    " LEXER" + PythonLexerBase._ERR_TXT + err_msg, 
+                                                    None)
 
     def _report_error(self, err_msg: str) -> None:
         self._report_lexer_error(err_msg)

@@ -32,8 +32,6 @@ import { CharStream, CharStreams, CommonTokenStream, Token, CommonToken, Lexer }
 import PythonLexer from "./PythonLexer.js";
 import PythonParser from "./PythonParser.js";
 
-type TokenSource = object;
-
 export default abstract class PythonLexerBase extends Lexer {
 	// default encoding for Python 3 source files without an encoding declaration (PEP 3120)
     public static readonly DEFAULT_ENCODING: string = "utf-8";
@@ -42,32 +40,32 @@ export default abstract class PythonLexerBase extends Lexer {
     private static readonly ERR_TXT = " ERROR: ";
     private static readonly LEXER_MODES_FOR_ISTRING_START: Map<string, number> = new Map<string, number>();
 
-    private sourceEncoding: string = "";
+    private sourceEncoding = "";
 
     // Indentation handling
     private indentationLengthStack: number[] = [];
 
     // Queued tokens waiting to be emitted to the token stream
     private pendingTokenQueue: Token[] = [];
-    private previousPendingTokenType: number = 0;
-    private lastPendingTokenTypeFromDefaultChannel: number = 0;
+    private previousPendingTokenType = 0;
+    private lastPendingTokenTypeFromDefaultChannel = 0;
 
     // Parenthesis / bracket / brace counts
-    private openParenBracketBraceCount: number = 0;
+    private openParenBracketBraceCount = 0;
     private parenOrBracketOpenedStack: number[] = [];
     private braceExpressionStack: string[] = [];
-    private lastClosedBraceExpression: string = "";
+    private lastClosedBraceExpression = "";
 
     // Current interpolated STRING_MIDDLE token type (FSTRING_MIDDLE or TSTRING_MIDDLE)
-    private activeInterpolatedStringMiddleTokenType: number = 0;
+    private activeInterpolatedStringMiddleTokenType = 0;
 
     // We reimplement mode/modeStack because not all runtimes expose _mode/_modeStack
-    private currentLexerMode: number = 0; // Lexer.DEFAULT_MODE
+    private currentLexerMode = 0; // Lexer.DEFAULT_MODE
     private lexerModeStack: number[] = [];
 
     // Current / lookahead tokens
-    private curToken: Token | undefined;
-    private laToken:  Token | undefined;
+    private curToken!: Token;
+    private laToken!:  Token;
 
     protected constructor(input: CharStream) {
         super(input);
@@ -92,8 +90,8 @@ export default abstract class PythonLexerBase extends Lexer {
         this.activeInterpolatedStringMiddleTokenType = 0;
         this.currentLexerMode = Lexer.DEFAULT_MODE;
         this.lexerModeStack = [];
-        this.curToken = undefined;
-        this.laToken = undefined;
+        this.curToken = null!;
+        this.laToken = null!;        
     }
 
     /**
@@ -120,7 +118,7 @@ export default abstract class PythonLexerBase extends Lexer {
             this.handleStartOfInput();
         }
 
-        switch (this.curToken!.type) {
+        switch (this.curToken.type) {
             case PythonLexer.NEWLINE:
                 this.handleNEWLINEtoken();
                 break;
@@ -128,43 +126,43 @@ export default abstract class PythonLexerBase extends Lexer {
             case PythonLexer.LSQB:
             case PythonLexer.LBRACE:
                 this.openParenBracketBraceCount++;
-                this.addPendingToken(this.curToken!);
+                this.addPendingToken(this.curToken);
                 break;
             case PythonLexer.RPAR:
             case PythonLexer.RSQB:
             case PythonLexer.RBRACE:
                 this.openParenBracketBraceCount--;
-                this.addPendingToken(this.curToken!);
+                this.addPendingToken(this.curToken);
                 break;
             case PythonLexer.FSTRING_MIDDLE:
             case PythonLexer.TSTRING_MIDDLE:
                 this.handleISTRING_MIDDLEtokenWithDoubleBrace(); // does not affect the opened field
-                this.addPendingToken(this.curToken!);
+                this.addPendingToken(this.curToken);
                 break;
             case PythonLexer.COLONEQUAL:
                 this.handleCOLONEQUALtokenInIString();
                 break;
             case PythonLexer.ERRORTOKEN:
-                this.reportLexerError(`token recognition error at: '${this.curToken!.text}'`);
-                this.addPendingToken(this.curToken!);
+                this.reportLexerError(`token recognition error at: '${this.curToken.text}'`);
+                this.addPendingToken(this.curToken);
                 break;
             case PythonLexer.EOF:
                 this.handleEOFtoken();
                 break;
             default:
-                this.addPendingToken(this.curToken!);
+                this.addPendingToken(this.curToken);
         }
         this.handleFORMAT_SPECIFICATION_MODE();
     }
 
     private setCurrentAndLookAheadTokens(): void {
-        this.curToken = this.laToken == undefined
+        this.curToken = this.laToken == null
             ? super.nextToken()
             : this.laToken;
 
         this.normalizeCurToken(); // Do not use laToken in this method or any of its submethods — it hasn't been set yet!
 
-        this.laToken = this.curToken!.type === PythonLexer.EOF
+        this.laToken = this.curToken.type === PythonLexer.EOF
             ? this.curToken
             : super.nextToken();
     }
@@ -184,22 +182,22 @@ export default abstract class PythonLexerBase extends Lexer {
         // The initial indentation length is never popped.
         this.indentationLengthStack.push(0); 
         
-        if (this.curToken!.type === PythonLexer.BOM) {
+        if (this.curToken.type === PythonLexer.BOM) {
             this.setCurrentAndLookAheadTokens();
         }
         this.insertENCODINGtoken();
 
-        while (this.curToken!.type !== PythonLexer.EOF) {
-            if (this.curToken!.channel === Token.DEFAULT_CHANNEL) {
-                if (this.curToken!.type === PythonLexer.NEWLINE) {
+        while (this.curToken.type !== PythonLexer.EOF) {
+            if (this.curToken.channel === Token.DEFAULT_CHANNEL) {
+                if (this.curToken.type === PythonLexer.NEWLINE) {
                     // all the NEWLINE tokens must be ignored before the first statement
-                    this.hideAndAddPendingToken(this.curToken!);
+                    this.hideAndAddPendingToken(this.curToken);
                 } else { // We're at the first statement
                     this.insertLeadingIndentToken();
                     return; // continue the processing of the current token with processCurrentToken()
                 }
             } else {
-                this.addPendingToken(this.curToken!); // it can be WS, EXPLICIT_LINE_JOINING or COMMENT token
+                this.addPendingToken(this.curToken); // it can be WS, EXPLICIT_LINE_JOINING or COMMENT token
             }
             this.setCurrentAndLookAheadTokens();
         } // continue the processing of the EOF token with processCurrentToken()
@@ -208,7 +206,7 @@ export default abstract class PythonLexerBase extends Lexer {
     private insertENCODINGtoken(): void { // https://peps.python.org/pep-0263/
         if (this.sourceEncoding === '') return;
 
-        const encodingToken: Token = this.curToken!.clone();
+        const encodingToken: Token = this.curToken.clone();
         encodingToken.type = PythonLexer.ENCODING;
         encodingToken.channel = Token.HIDDEN_CHANNEL;
         encodingToken.start = 0;
@@ -226,7 +224,7 @@ export default abstract class PythonLexerBase extends Lexer {
                 const errMsg: string = "first statement indented";
                 this.reportLexerError(errMsg);
                 // insert an INDENT token before the first statement to trigger an 'unexpected indent' error later in the parser
-                this.createAndAddPendingToken(this.curToken!, PythonLexer.INDENT, PythonLexerBase.ERR_TXT + errMsg);
+                this.createAndAddPendingToken(this.curToken, PythonLexer.INDENT, PythonLexerBase.ERR_TXT + errMsg);
             }
         }
     }
@@ -238,34 +236,34 @@ export default abstract class PythonLexerBase extends Lexer {
 
     private handleNEWLINEtoken(): void {
         if (this.lexerModeStack.length > 0) { // for multi line f/t-string literals
-            this.addPendingToken(this.curToken!);
+            this.addPendingToken(this.curToken);
             return;
         }
 
         if (this.openParenBracketBraceCount > 0) { // We're in an implicit line joining, ignore the current NEWLINE token
-            this.hideAndAddPendingToken(this.curToken!);
+            this.hideAndAddPendingToken(this.curToken);
             return;
         }
 
-        const nlToken: Token = this.curToken!.clone(); // save the current NEWLINE token
-        const isLookingAhead: boolean = this.laToken!.type === PythonLexer.WS;
+        const nlToken: Token = this.curToken.clone(); // save the current NEWLINE token
+        const isLookingAhead: boolean = this.laToken.type === PythonLexer.WS;
         if (isLookingAhead) {
             this.setCurrentAndLookAheadTokens(); // set the next two tokens
         }
 
-        switch (this.laToken!.type) {
+        switch (this.laToken.type) {
             case PythonLexer.NEWLINE: // We're before a blank line
             case PythonLexer.COMMENT: // We're before a comment
                 this.hideAndAddPendingToken(nlToken);
                 if (isLookingAhead) {
-                    this.addPendingToken(this.curToken!); // WS token
+                    this.addPendingToken(this.curToken); // WS token
                 }
                 break;
             default:
                 this.addPendingToken(nlToken);
                 if (isLookingAhead) { // We're on whitespace(s) followed by a statement
-                    this.addPendingToken(this.curToken!); // WS token
-                    const indentationLength = this.getIndentationLength(this.curToken!.text);
+                    this.addPendingToken(this.curToken); // WS token
+                    const indentationLength = this.getIndentationLength(this.curToken.text);
                     this.insertIndentOrDedentToken(indentationLength); // may insert INDENT token or DEDENT token(s)
                 } else { // We're at a newline followed by a statement (there is no whitespace before the statement)
                     this.insertIndentOrDedentToken(0); // may insert DEDENT token(s)
@@ -276,7 +274,7 @@ export default abstract class PythonLexerBase extends Lexer {
     private insertIndentOrDedentToken(indentLength: number): void {
         let previousIndentLength: number = this.indentationLengthStack.at(-1)!; // ppek
         if (indentLength > previousIndentLength) {
-            this.createAndAddPendingToken(this.laToken!, PythonLexer.INDENT, null);
+            this.createAndAddPendingToken(this.laToken, PythonLexer.INDENT, null);
             this.indentationLengthStack.push(indentLength);
             return;
         }
@@ -285,7 +283,7 @@ export default abstract class PythonLexerBase extends Lexer {
             this.indentationLengthStack.pop();
             previousIndentLength = this.indentationLengthStack.at(-1)!; // peek
             if (indentLength <= previousIndentLength) {
-                this.createAndAddPendingToken(this.laToken!, PythonLexer.DEDENT, null);
+                this.createAndAddPendingToken(this.laToken, PythonLexer.DEDENT, null);
             } else {
                 this.reportError("inconsistent dedent");
             }
@@ -295,7 +293,7 @@ export default abstract class PythonLexerBase extends Lexer {
     private getIndentationLength(indentText: string): number { // the indentText may contain spaces, tabs or form feeds
         let length: number = 0;
 
-        if (this.laToken!.type !== PythonLexer.EOF) {
+        if (this.laToken.type !== PythonLexer.EOF) {
             for (const ch of indentText) {
                 switch (ch) {
                     case ' ': // space
@@ -320,7 +318,7 @@ export default abstract class PythonLexerBase extends Lexer {
     // and brace-expression accumulation inside interpolated segments.
 
     private normalizeCurToken(): void {
-        switch (this.curToken!.type) {
+        switch (this.curToken.type) {
             case PythonLexer.FSTRING_START:
                 this.activeInterpolatedStringMiddleTokenType = PythonLexer.FSTRING_MIDDLE;
                 this.setLexerModeByISTRING_STARTtoken();
@@ -332,7 +330,7 @@ export default abstract class PythonLexerBase extends Lexer {
             case PythonLexer.FSTRING_MIDDLE:
             case PythonLexer.TSTRING_MIDDLE:
                 this.handleISTRING_MIDDLEtokenWithQuoteAndLBrace(); // affect the opened field
-                switch (this.curToken!.type) {
+                switch (this.curToken.type) {
                     case PythonLexer.FSTRING_MIDDLE:
                     case PythonLexer.TSTRING_MIDDLE:
                         return; // No curToken exchange happened
@@ -351,11 +349,11 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private processBraceExpression(): void {
-        switch (this.curToken!.type) { // the following tokens can only come from default mode (after an LBRACE in f/t-string)
+        switch (this.curToken.type) { // the following tokens can only come from default mode (after an LBRACE in f/t-string)
             case PythonLexer.NEWLINE:
                 // append the current brace expression with the current newline
-                this.appendToBraceExpression(this.curToken!.text);
-                this.curToken!.channel = Token.HIDDEN_CHANNEL;
+                this.appendToBraceExpression(this.curToken.text);
+                this.curToken.channel = Token.HIDDEN_CHANNEL;
                 break;
             case PythonLexer.LBRACE:
                 // the outermost brace expression cannot be a dictionary comprehension or a set comprehension
@@ -366,20 +364,20 @@ export default abstract class PythonLexerBase extends Lexer {
             case PythonLexer.LPAR:
             case PythonLexer.LSQB:
                 // append the current brace expression with a "(" or a "["
-                this.appendToBraceExpression(this.curToken!.text);
+                this.appendToBraceExpression(this.curToken.text);
                 // https://peps.python.org/pep-0498/#lambdas-inside-expressions
                 this.incrementBraceDepth();
                 break;
             case PythonLexer.RPAR:
             case PythonLexer.RSQB:
                 // append the current brace expression with a ")" or a "]"
-                this.appendToBraceExpression(this.curToken!.text);
+                this.appendToBraceExpression(this.curToken.text);
                 this.decrementBraceDepth();
                 break;
             case PythonLexer.COLON:
             case PythonLexer.COLONEQUAL:
                 // append the current brace expression with a ":" or a ":="
-                this.appendToBraceExpression(this.curToken!.text);
+                this.appendToBraceExpression(this.curToken.text);
                 this.setLexerModeByCOLONorCOLONEQUALtoken();
                 break;
             case PythonLexer.RBRACE:
@@ -387,30 +385,30 @@ export default abstract class PythonLexerBase extends Lexer {
                 break;
             default:
                 // append the current brace expression with the current token text
-                this.appendToBraceExpression(this.curToken!.text);
+                this.appendToBraceExpression(this.curToken.text);
         }
     }
 
     private appendToBraceExpression(text: string): void {
         const lastIndex: number = this.braceExpressionStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (lastIndex < 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.curToken.line})`);
 
         this.braceExpressionStack[lastIndex] += text;
     }
 
     private incrementBraceDepth(): void { // increment the last element (stack peek + 1)
         const lastIndex: number = this.parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.curToken!.line})`);
+        if (lastIndex < 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.curToken.line})`);
 
         this.parenOrBracketOpenedStack[lastIndex]!++;
     }
 
     private decrementBraceDepth(): void { // decrement the last element (stack peek - 1)
         const lastIndex: number = this.parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (lastIndex < 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.curToken.line})`);
 
         const top: number = this.parenOrBracketOpenedStack[lastIndex]!;
-        if (top <= 0) throw new Error(`Cannot decrement brace depth: depth is already zero. (detected at line ${this.curToken!.line})`);
+        if (top <= 0) throw new Error(`Cannot decrement brace depth: depth is already zero. (detected at line ${this.curToken.line})`);
 
         this.parenOrBracketOpenedStack[lastIndex]! = top - 1;
     }
@@ -451,13 +449,13 @@ export default abstract class PythonLexerBase extends Lexer {
             PythonLexerBase.initLexerModesForIStringStart();
         }
 
-        const interpolatedStringPrefix: string = this.curToken!.text.toLowerCase();
+        const interpolatedStringPrefix: string = this.curToken.text.toLowerCase();
         if (PythonLexerBase.LEXER_MODES_FOR_ISTRING_START.has(interpolatedStringPrefix)) {
             const newLexerMode: number = PythonLexerBase.LEXER_MODES_FOR_ISTRING_START.get(interpolatedStringPrefix)!;
             this.pushLexerMode(newLexerMode);
         } else {
             this.reportLexerError(
-                "internal error: unknown interpolated string literal prefix: " + this.curToken!.text
+                "internal error: unknown interpolated string literal prefix: " + this.curToken.text
             );
         }
     }
@@ -493,13 +491,13 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private setLexerModeByCOLONorCOLONEQUALtoken(): void {
-        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot peek brace depth: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot peek brace depth: stack is empty. (detected at line ${this.curToken.line})`);
 
         // Exit early when the current lexer mode indicates an open parenthesis/bracket
         const opened: boolean = this.parenOrBracketOpenedStack.at(-1)! > 0; /* stack peek */
         if (opened) return;
 
-        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot peek lexer mode: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot peek lexer mode: stack is empty. (detected at line ${this.curToken.line})`);
 
         // COLONEQUAL token will be replaced with a COLON token in processCurrentToken()
         const prevLexerMode: number = this.lexerModeStack.at(-1)!; /* stack peek */
@@ -587,10 +585,10 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private popByBRACE(): void {
-        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.curToken.line})`);
         this.parenOrBracketOpenedStack.pop();
         
-        if (this.braceExpressionStack.length <= 0) throw new Error(`Cannot pop brace expression: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (this.braceExpressionStack.length <= 0) throw new Error(`Cannot pop brace expression: stack is empty. (detected at line ${this.curToken.line})`);
         const parentBraceExpression: string = this.braceExpressionStack.pop()!;
 
         this.lastClosedBraceExpression = parentBraceExpression + "}";
@@ -628,16 +626,16 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private getLastTwoCharsOfTheCurTokenText(): string {
-        const text = this.curToken!.text;
+        const text = this.curToken.text;
         return text.length <= 2 ? text : text.slice(-2);
     }
 
     private trimLastCharAddPendingTokenSetCurToken(tokenType: number, tokenText: string, channel: number): void {
         // Trim the last char and add the modified curToken to the pendingTokenQueue
-        const tokenTextWithoutLastChar: string = this.curToken!.text.slice(0, -1);
-        this.curToken!.text = tokenTextWithoutLastChar;
-        this.curToken!.stop -= 1;
-        this.addPendingToken(this.curToken!);
+        const tokenTextWithoutLastChar: string = this.curToken.text.slice(0, -1);
+        this.curToken.text = tokenTextWithoutLastChar;
+        this.curToken.stop -= 1;
+        this.addPendingToken(this.curToken);
 
         this.createNewCurrentTokenInstance(tokenType, tokenText, channel); // Set curToken
     }
@@ -650,29 +648,29 @@ export default abstract class PythonLexerBase extends Lexer {
             // If used outside, split the COLONEQUAL token into a COLON
             // (used as a format specifier instead of a walrus operator),
             // and move the equal sign to the beginning of the next token (FSTRING_MIDDLE or TSTRING_MIDDLE).
-            this.curToken!.type = PythonLexer.COLON;
-            this.curToken!.text = ":";
-            this.curToken!.stop = this.curToken!.start;
+            this.curToken.type = PythonLexer.COLON;
+            this.curToken.text = ":";
+            this.curToken.stop = this.curToken.start;
 
-            switch (this.laToken!.type) {
+            switch (this.laToken.type) {
                 case PythonLexer.FSTRING_MIDDLE:
                 case PythonLexer.TSTRING_MIDDLE: {
-                    this.laToken!.text = "=" + this.laToken!.text;
-                    this.laToken!.start -= 1;
-                    this.laToken!.column -= 1;
+                    this.laToken.text = "=" + this.laToken.text;
+                    this.laToken.start -= 1;
+                    this.laToken.column -= 1;
                     break;
                 }
                 default: {
-                    this.addPendingToken(this.curToken!);
+                    this.addPendingToken(this.curToken);
                     this.createNewCurrentTokenInstance(this.activeInterpolatedStringMiddleTokenType, "=", Token.DEFAULT_CHANNEL);
                 }
             }
         }
-        this.addPendingToken(this.curToken!);
+        this.addPendingToken(this.curToken);
     }
 
     private createNewCurrentTokenInstance(tokenType: number, tokenText: string, channel: number): void {
-        const token: CommonToken = this.curToken!.clone();
+        const token: CommonToken = this.curToken.clone();
         token.type = tokenType;
         token.text = tokenText;
         token.channel = channel;
@@ -694,7 +692,7 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private popLexerMode(): void {
-        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot pop lexer mode: stack is empty. (detected at line ${this.curToken!.line})`);
+        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot pop lexer mode: stack is empty. (detected at line ${this.curToken.line})`);
 
         this.popMode();
         this.currentLexerMode = this.lexerModeStack.pop()!;
@@ -703,19 +701,19 @@ export default abstract class PythonLexerBase extends Lexer {
     // ===================== Format‑Specifier Handling =====================
 
     private handleFORMAT_SPECIFICATION_MODE(): void {
-        if (this.lexerModeStack.length === 0 || this.laToken!.type !== PythonLexer.RBRACE) {
+        if (this.lexerModeStack.length === 0 || this.laToken.type !== PythonLexer.RBRACE) {
             return;
         }
 
         // insert an empty FSTRING_MIDDLE or TSTRING_MIDDLE token instead of the missing format specification
-        switch (this.curToken!.type) {
+        switch (this.curToken.type) {
             case PythonLexer.COLON:
-                this.createAndAddPendingToken(this.laToken!, this.activeInterpolatedStringMiddleTokenType, "");
+                this.createAndAddPendingToken(this.laToken, this.activeInterpolatedStringMiddleTokenType, "");
                 break;
             case PythonLexer.RBRACE:
                 // only when the previous brace expression is not a dictionary comprehension or set comprehension
                 if (!this.isValid_DictionaryOrSet_ComprehensionExpression(this.lastClosedBraceExpression)) {
-                    this.createAndAddPendingToken(this.laToken!, this.activeInterpolatedStringMiddleTokenType, "");
+                    this.createAndAddPendingToken(this.laToken, this.activeInterpolatedStringMiddleTokenType, "");
                 }
                 break;
         }
@@ -758,7 +756,7 @@ export default abstract class PythonLexerBase extends Lexer {
                 break; // no trailing NEWLINE token is needed
             default:
                 // insert an extra trailing NEWLINE token that serves as the end of the last statement
-                this.createAndAddPendingToken(this.laToken!, PythonLexer.NEWLINE, null); // laToken is EOF
+                this.createAndAddPendingToken(this.laToken, PythonLexer.NEWLINE, null); // laToken is EOF
         }
         this.insertIndentOrDedentToken(0); // Now insert as much trailing DEDENT tokens as needed
     }
@@ -768,7 +766,7 @@ export default abstract class PythonLexerBase extends Lexer {
             // there was a statement in the input (leading NEWLINE tokens are hidden)
             this.insertTrailingTokens();
         }
-        this.addPendingToken(this.curToken!);
+        this.addPendingToken(this.curToken);
     }
 
     // ===================== Pending‑Token Management =====================
@@ -806,13 +804,13 @@ export default abstract class PythonLexerBase extends Lexer {
     // parser receives accurate context for recovery.
 
     private reportLexerError(errMsg: string): void {
-        this.getErrorListener().syntaxError(this, this.curToken!.type, this.curToken!.line, this.curToken!.column, " LEXER" + PythonLexerBase.ERR_TXT + errMsg, undefined);
+        this.getErrorListener().syntaxError(this, this.curToken.type, this.curToken.line, this.curToken.column, " LEXER" + PythonLexerBase.ERR_TXT + errMsg, undefined);
     }
 
     private reportError(errMsg: string): void {
         this.reportLexerError(errMsg);
 
-        this.createAndAddPendingToken(this.laToken!, PythonLexer.ERRORTOKEN, PythonLexerBase.ERR_TXT + errMsg);
+        this.createAndAddPendingToken(this.laToken, PythonLexer.ERRORTOKEN, PythonLexerBase.ERR_TXT + errMsg);
         // the ERRORTOKEN also triggers a parser error 
     }
 }
