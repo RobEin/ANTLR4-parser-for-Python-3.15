@@ -24,8 +24,10 @@ THE SOFTWARE.
 
 
  /*
-  * Project      : an ANTLR4 parser grammar for Python 3 programming language based on the official PEG grammar
+  * Project      : an ANTLR4 parser grammar for Python 3 programming language based on 
+  *                the official PEG parser grammar
   *                https://github.com/RobEin/ANTLR4-parser-for-Python-3.15
+  *  
   * Developed by : Robert Einhorn
   *
   */
@@ -37,6 +39,7 @@ THE SOFTWARE.
 parser grammar PythonParser;
 
 options { tokenVocab=PythonLexer; }
+
 
  /*
   * 
@@ -51,11 +54,8 @@ options { tokenVocab=PythonLexer; }
   * 
   * 
   * 
-  * 
-  * 
-  * 
-  * 
-  * The "STARTING RULES" also starts at line 63 in the original PEG parser grammar:
+  *
+  * The PEG parser grammar and the converted ANTLR4 parser grammar can be matched line by line.
   * https://docs.python.org/3/reference/grammar.html
   * 
   */
@@ -955,14 +955,14 @@ func_type_comment
 
 // *** related to soft keywords: https://docs.python.org/3.15/reference/lexical_analysis.html#soft-keywords
 name_except_underscore
-    : NAME // ***** The NAME token can be used only in this rule *****
+    : NAME // ***** The NAME token can be used only in this rule! *****
     | NAME_OR_TYPE
     | NAME_OR_MATCH
     | NAME_OR_CASE
     | NAME_OR_LAZY
     ;
 
-// ***** Always use the name rule instead of the NAME token in this grammar *****
+// ***** Always use the name rule instead of the NAME token in this grammar! *****
 name: NAME_OR_WILDCARD | name_except_underscore;
 
 // ========================= END OF THE GRAMMAR ===========================

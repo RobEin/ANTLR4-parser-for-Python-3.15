@@ -37,20 +37,8 @@ import java.util.Map;
 import java.util.Collections;
 
 import org.antlr.v4.runtime.*;
-import org.antlr.v4.runtime.misc.Pair;
 
 public abstract class PythonLexerBase extends Lexer {
-    // Represents the regular and alternative indentation lengths.
-    private static class IndentationLength {
-        final int length;
-        final int altLength;
-
-        IndentationLength(int length, int altLength) {
-            this.length = length;
-            this.altLength = altLength;
-        }
-    }
-
     // The default encoding for Python 3 source files without an encoding declaration (PEP 3120)
     public static final String DEFAULT_ENCODING = "utf-8";
 
@@ -447,23 +435,23 @@ public abstract class PythonLexerBase extends Lexer {
     }
 
     private void appendToBraceExpression(final String text) {
-        if (this.braceExpressionStack.isEmpty()) throw new IllegalStateException("Cannot append to brace expression: stack is empty. (detected at line " + curToken.getLine() + ")");
+        if (this.braceExpressionStack.isEmpty()) throw new IllegalStateException("Cannot append to brace expression: stack is empty. (detected at line " + this.curToken.getLine() + ")");
 
         final String top = this.braceExpressionStack.pop();
         this.braceExpressionStack.push(top + text);
     }
 
     private void incrementBraceDepth() { // increment the last element
-        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot increment brace depth. (detected at line " + curToken.getLine() + ")");
+        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot increment brace depth. (detected at line " + this.curToken.getLine() + ")");
 
         this.parenOrBracketOpenedStack.push(this.parenOrBracketOpenedStack.pop() + 1);
     }
 
     private void decrementBraceDepth() { // decrement the last element
-        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot decrement brace depth: stack is empty. (detected at line " + curToken.getLine() + ")");
+        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot decrement brace depth: stack is empty. (detected at line " + this.curToken.getLine() + ")");
 
         final int top = this.parenOrBracketOpenedStack.pop();
-        if (top <= 0) throw new IllegalStateException("Cannot decrement brace depth: depth is already zero. (detected at line " + curToken.getLine() + ")");
+        if (top <= 0) throw new IllegalStateException("Cannot decrement brace depth: depth is already zero. (detected at line " + this.curToken.getLine() + ")");
 
         this.parenOrBracketOpenedStack.push(top - 1);
     }
@@ -510,7 +498,7 @@ public abstract class PythonLexerBase extends Lexer {
     }
 
     private void setLexerModeByCOLONorCOLONEQUALtoken() {
-        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot peek brace depth: stack is empty. (detected at line " + curToken.getLine() + ")");
+        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot peek brace depth: stack is empty. (detected at line " + this.curToken.getLine() + ")");
 
         // Exit early when the current lexer mode indicates an open parenthesis/bracket
         final boolean opened = this.parenOrBracketOpenedStack.peek() != 0;
@@ -589,10 +577,10 @@ public abstract class PythonLexerBase extends Lexer {
     }
 
     private void popByBRACE() {
-        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot pop brace depth: stack is empty. (detected at line " + curToken.getLine() + ")");
+        if (this.parenOrBracketOpenedStack.isEmpty()) throw new IllegalStateException("Cannot pop brace depth: stack is empty. (detected at line " + this.curToken.getLine() + ")");
         this.parenOrBracketOpenedStack.pop();
         
-        if (this.braceExpressionStack.isEmpty()) throw new IllegalStateException("Cannot pop brace expression: stack is empty. (detected at line " + curToken.getLine() + ")");
+        if (this.braceExpressionStack.isEmpty()) throw new IllegalStateException("Cannot pop brace expression: stack is empty. (detected at line " + this.curToken.getLine() + ")");
         String parentBraceExpression = this.braceExpressionStack.pop();
 
         this.lastClosedBraceExpression = parentBraceExpression + "}";
