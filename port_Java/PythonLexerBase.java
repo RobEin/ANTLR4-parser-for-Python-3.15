@@ -341,7 +341,7 @@ public abstract class PythonLexerBase extends Lexer {
                         length++;
                         break;
 
-                    case '\t':
+                    case '\t': // tab
                         length += PythonLexerBase.TAB_LENGTH - (length % PythonLexerBase.TAB_LENGTH);
                         break;
 
