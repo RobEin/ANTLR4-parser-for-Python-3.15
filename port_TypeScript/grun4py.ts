@@ -211,13 +211,16 @@ class Grun4py {
     private readAsciiLine(fd: number): string | null {
         const buf = Buffer.alloc(1);
         const lineBuilder: string[] = [];
-        let read: number;
-        while ((read = fs.readSync(fd, buf, 0, 1, null)) !== 0) {
-            const ascii = buf[0]!;
+
+        while (fs.readSync(fd, buf, 0, 1, null) !== 0) {
+            const ascii = buf.readUInt8(0);
             if (ascii > MAX_ASCII) return null;
-            if (ascii === '\n'.charCodeAt(0)) break;
-            if (ascii !== '\r'.charCodeAt(0)) lineBuilder.push(String.fromCharCode(ascii));
+            if (ascii === "\n".charCodeAt(0)) break;
+            if (ascii !== "\r".charCodeAt(0)) {
+                lineBuilder.push(String.fromCharCode(ascii));
+            }
         }
+
         return lineBuilder.join("");
     }
 
@@ -248,7 +251,7 @@ class Grun4py {
             && !this.isUTF8(commentEncoding);
 
         if (hasConflict) {
-            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${this.DEFAULT_ENCODING} BOM`,);
+            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${this.DEFAULT_ENCODING} BOM`);
         }
 
         return commentEncoding || this.DEFAULT_ENCODING;
