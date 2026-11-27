@@ -106,7 +106,7 @@ export default abstract class PythonLexerBase extends Lexer {
 
     public nextToken(): Token { // Reading the input stream until EOF is reached
         this.processCurrentToken();
-        return this.pendingTokenQueue.shift()!; /* .pollFirst() */; // Add the queued token to the token stream
+        return this.pendingTokenQueue.shift() ?? this.getErrortoken(); /* .pollFirst() */; // Add the queued token to the token stream
     }
 
     private processCurrentToken(): void {
@@ -219,7 +219,7 @@ export default abstract class PythonLexerBase extends Lexer {
 
     private insertLeadingIndentToken(): void {
         if (this.previousPendingTokenType === PythonLexer.WS) {
-            const prevToken: Token = this.pendingTokenQueue.at(-1)!; /* stack peek */ // WS token
+            const prevToken: Token = this.pendingTokenQueue.at(-1) ?? this.getErrortoken(); /* stack peek */ // WS token
             if (this.getIndentationLength(prevToken.text) !== 0) { // there is an "indentation" before the first statement
                 const errMsg: string = "first statement indented";
                 this.reportLexerError(errMsg);
@@ -272,7 +272,7 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private insertIndentOrDedentToken(indentLength: number): void {
-        let previousIndentLength: number = this.indentationLengthStack.at(-1)!; // ppek
+        let previousIndentLength: number = this.indentationLengthStack.at(-1) ?? 0; // peek
         if (indentLength > previousIndentLength) {
             this.createAndAddPendingToken(this.laToken, PythonLexer.INDENT, null);
             this.indentationLengthStack.push(indentLength);
@@ -281,7 +281,7 @@ export default abstract class PythonLexerBase extends Lexer {
 
         while (indentLength < previousIndentLength) { // more than 1 DEDENT token may be inserted to the token stream
             this.indentationLengthStack.pop();
-            previousIndentLength = this.indentationLengthStack.at(-1)!; // peek
+            previousIndentLength = this.indentationLengthStack.at(-1) ?? 0; // peek
             if (indentLength <= previousIndentLength) {
                 this.createAndAddPendingToken(this.laToken, PythonLexer.DEDENT, null);
             } else {
@@ -390,27 +390,24 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private appendToBraceExpression(text: string): void {
-        const lastIndex: number = this.braceExpressionStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.curToken.line})`);
+        const top: string = this.braceExpressionStack.pop() ?? "";
+        if (top === "") {throw new Error(`Cannot append to brace expression. (detected at line ${this.curToken.line})`);}
 
-        this.braceExpressionStack[lastIndex] += text;
+        this.braceExpressionStack.push(top + text);
     }
 
     private incrementBraceDepth(): void { // increment the last element (stack peek + 1)
-        const lastIndex: number = this.parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.curToken.line})`);
+        const top: number = this.parenOrBracketOpenedStack.pop() ?? -1;
+        if (top === -1) {throw new Error(`Cannot increment brace depth. (detected at line ${this.curToken.line})`);}
 
-        this.parenOrBracketOpenedStack[lastIndex]!++;
+        this.parenOrBracketOpenedStack.push(top + 1);
     }
 
     private decrementBraceDepth(): void { // decrement the last element (stack peek - 1)
-        const lastIndex: number = this.parenOrBracketOpenedStack.length - 1;
-        if (lastIndex < 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.curToken.line})`);
+        const top: number = this.parenOrBracketOpenedStack.pop() ?? -1;
+        if (top <= 0) {throw new Error(`Cannot decrement brace depth. (detected at line ${this.curToken.line})`);}
 
-        const top: number = this.parenOrBracketOpenedStack[lastIndex]!;
-        if (top <= 0) throw new Error(`Cannot decrement brace depth: depth is already zero. (detected at line ${this.curToken.line})`);
-
-        this.parenOrBracketOpenedStack[lastIndex]! = top - 1;
+        this.parenOrBracketOpenedStack.push(top - 1);
     }
 
     private setLexerModeAfterRBRACEtoken(): void {
@@ -451,7 +448,7 @@ export default abstract class PythonLexerBase extends Lexer {
 
         const interpolatedStringPrefix: string = this.curToken.text.toLowerCase();
         if (PythonLexerBase.LEXER_MODES_FOR_ISTRING_START.has(interpolatedStringPrefix)) {
-            const newLexerMode: number = PythonLexerBase.LEXER_MODES_FOR_ISTRING_START.get(interpolatedStringPrefix)!;
+            const newLexerMode: number = PythonLexerBase.LEXER_MODES_FOR_ISTRING_START.get(interpolatedStringPrefix) ?? -1;
             this.pushLexerMode(newLexerMode);
         } else {
             this.reportLexerError(
@@ -491,16 +488,16 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private setLexerModeByCOLONorCOLONEQUALtoken(): void {
-        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot peek brace depth: stack is empty. (detected at line ${this.curToken.line})`);
+        const parenOrBracketOpened: number = this.parenOrBracketOpenedStack.at(-1) ?? -1; /* stack peek */
+        if (parenOrBracketOpened === -1) {throw new Error(`Cannot peek parenthesis/bracket depth. (detected at line ${this.curToken.line})`);}
 
         // Exit early when the current lexer mode indicates an open parenthesis/bracket
-        const opened: boolean = this.parenOrBracketOpenedStack.at(-1)! > 0; /* stack peek */
-        if (opened) return;
+        if (parenOrBracketOpened > 0) return;
 
-        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot peek lexer mode: stack is empty. (detected at line ${this.curToken.line})`);
+        const prevLexerMode: number = this.lexerModeStack.at(-1) ?? -1; /* stack peek */
+        if (prevLexerMode === -1) {throw new Error(`Cannot peek lexer mode. (detected at line ${this.curToken.line})`);}
 
         // COLONEQUAL token will be replaced with a COLON token in processCurrentToken()
-        const prevLexerMode: number = this.lexerModeStack.at(-1)!; /* stack peek */
         switch (prevLexerMode) {
             case PythonLexer.SQ1__FSTRING_MODE:
             case PythonLexer.SQ1__FSTRING_FORMAT_SPECIFICATION_MODE:
@@ -585,17 +582,19 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private popByBRACE(): void {
-        if (this.parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.curToken.line})`);
+        if (this.parenOrBracketOpenedStack.length <= 0) {throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.curToken.line})`);}
         this.parenOrBracketOpenedStack.pop();
         
-        if (this.braceExpressionStack.length <= 0) throw new Error(`Cannot pop brace expression: stack is empty. (detected at line ${this.curToken.line})`);
-        const parentBraceExpression: string = this.braceExpressionStack.pop()!;
+        let parentBraceExpression: string = this.braceExpressionStack.pop() ?? "";
+        if (parentBraceExpression === "") {throw new Error(`Cannot pop brace expression. (detected at line ${this.curToken.line})`);}
 
         this.lastClosedBraceExpression = parentBraceExpression + "}";
         if (this.braceExpressionStack.length > 0) {
             // Extend the current brace expression by adding the previous expression
-            const lastIndex: number = this.braceExpressionStack.length - 1;
-            this.braceExpressionStack[lastIndex] += this.lastClosedBraceExpression;
+            parentBraceExpression = this.braceExpressionStack.pop() ?? "";
+            if (parentBraceExpression === "") {throw new Error(`Cannot pop brace expression. (detected at line ${this.curToken.line})`);}
+
+            this.braceExpressionStack.push(parentBraceExpression + this.lastClosedBraceExpression);
         }
     }
 
@@ -692,10 +691,9 @@ export default abstract class PythonLexerBase extends Lexer {
     }
 
     private popLexerMode(): void {
-        if (this.lexerModeStack.length <= 0) throw new Error(`Cannot pop lexer mode: stack is empty. (detected at line ${this.curToken.line})`);
-
         this.popMode();
-        this.currentLexerMode = this.lexerModeStack.pop()!;
+        this.currentLexerMode = this.lexerModeStack.pop() ?? -1;
+        if (this.currentLexerMode === -1) {throw new Error(`Cannot pop lexer mode. (detected at line ${this.curToken.line})`);}
     }
 
     // ===================== Format‑Specifier Handling =====================
@@ -786,6 +784,14 @@ export default abstract class PythonLexerBase extends Lexer {
         token.text = tokenText ?? `<${PythonLexer.symbolicNames[tokenType] ?? ""}>`;
 
         this.addPendingToken(token);
+    }
+
+    private getErrortoken(): Token {
+        const errorToken: Token = this.curToken.clone();
+        errorToken.type = PythonLexer.ERRORTOKEN;
+        errorToken.channel = Token.DEFAULT_CHANNEL;
+        errorToken.text = "ERROR";
+        return errorToken;
     }
 
     private addPendingToken(token: Token): void {

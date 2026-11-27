@@ -1,11 +1,15 @@
 # JavaScript port
+
 ##
+
 #### Prerequisites:
+
 - Installed [ANTLR4-tools](https://github.com/antlr/antlr4/blob/master/doc/getting-started.md#getting-started-the-easy-way-using-antlr4-tools)
 - Installed [Node.js](https://nodejs.org/en/download/package-manager)
  
 
 #### Command line example for Node.js:
+
 - first download the necessary node modules and set the ```type``` field in the ```package.json``` then copy the two grammar files and example.py to this directory:
 ```bash
     npm install antlr4
@@ -34,4 +38,5 @@ node grun4py.js example.py
 
 
 #### Related link:
+
 [ANTLR4 JavaScript target](https://github.com/antlr/antlr4/blob/dev/doc/javascript-target.md)

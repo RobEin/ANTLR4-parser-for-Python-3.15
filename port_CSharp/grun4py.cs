@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 public static class Grun4py
 {
-    private static readonly string DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
+    private static readonly string DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2: ASCII, Python 3: utf-8
     private static readonly byte[] UTF8_BOM = [0xEF, 0xBB, 0xBF];
     private static readonly byte[] UTF32_BE_BOM = [0x00, 0x00, 0xFE, 0xFF];
     private static readonly byte[] UTF32_LE_BOM = [0xFF, 0xFE, 0x00, 0x00];

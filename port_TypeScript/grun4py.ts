@@ -11,7 +11,6 @@ import PythonLexer from "./PythonLexer";
 import PythonParser from "./PythonParser";
 
 // Encoding detection constants
-export const UTF8 = "utf-8";
 export const UTF8_BOM = [0xef, 0xbb, 0xbf] as const;
 export const UTF32_BE_BOM = [0x00, 0x00, 0xfe, 0xff] as const;
 export const UTF32_LE_BOM = [0xff, 0xfe, 0x00, 0x00] as const;
@@ -22,6 +21,7 @@ export const MAX_BOM_LENGTH = 4;
 export const MAX_ASCII = 0x7f;
 
 class Grun4py {
+    private readonly DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2: ASCII, Python 3: utf-8
     private readonly ENCODING_REGEX = /^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)/;
     private readonly COMMENT_REGEX = /^[ \t\f]*(#.*)?$/;
     private readonly ENCODING_MAP = new Map<string, string>([
@@ -72,8 +72,8 @@ class Grun4py {
             process.exit(1);
         }
 
-        const filePath = args[0];
-        if (filePath === undefined) {
+        const filePath = args[0] ?? "";
+        if (filePath.length === 0) {
             throw new Error("Missing file path argument.");
         }
 
@@ -101,7 +101,7 @@ class Grun4py {
         }
     }
 
-    private readFileWithEncoding(filePath: string, sourceEncoding: string,): string {
+    private readFileWithEncoding(filePath: string, sourceEncoding: string): string {
         // IMPORTANT: Decode the file using the detected source encoding before
         // creating the ANTLR CharStream. This ensures that encoding errors are
         // detected before lexical analysis and that the lexer receives decoded text.
@@ -112,7 +112,13 @@ class Grun4py {
                 const decoder = new TextDecoder('utf-8', { fatal: true });
                 return decoder.decode(buffer);
             }
-            return iconv.decode(buffer, sourceEncoding as iconv.Encoding);
+
+            const decoded: unknown = iconv.decode(buffer, sourceEncoding as iconv.Encoding);
+            if (typeof decoded !== "string") {
+                throw new TypeError("Decoder did not return a string.");
+            }
+
+            return decoded;
         } catch (ex) {
             throw new Error(`Failed to decode file with encoding '${sourceEncoding}': ${ex instanceof Error ? ex.message : String(ex)}`,{ cause: ex },);
         }
@@ -205,19 +211,13 @@ class Grun4py {
     private readAsciiLine(fd: number): string | null {
         const buf = Buffer.alloc(1);
         const lineBuilder: string[] = [];
-
-        while (true) {
-            const bytesRead = fs.readSync(fd, buf, 0, 1, null);
-            if (bytesRead === 0) break;
-
-            const ascii = buf.readUInt8(0);
+        let read: number;
+        while ((read = fs.readSync(fd, buf, 0, 1, null)) !== 0) {
+            const ascii = buf[0]!;
             if (ascii > MAX_ASCII) return null;
-            if (ascii === "\n".charCodeAt(0)) break;
-            if (ascii !== "\r".charCodeAt(0)) {
-                lineBuilder.push(String.fromCharCode(ascii));
-            }
+            if (ascii === '\n'.charCodeAt(0)) break;
+            if (ascii !== '\r'.charCodeAt(0)) lineBuilder.push(String.fromCharCode(ascii));
         }
-
         return lineBuilder.join("");
     }
 
@@ -248,10 +248,10 @@ class Grun4py {
             && !this.isUTF8(commentEncoding);
 
         if (hasConflict) {
-            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${UTF8} BOM`,);
+            throw new Error(`Encoding problem for '${path.basename(filePath)}': ${this.DEFAULT_ENCODING} BOM`,);
         }
 
-        return commentEncoding || UTF8;
+        return commentEncoding || this.DEFAULT_ENCODING;
     }
 
     private isUTF8(enc: string): boolean {

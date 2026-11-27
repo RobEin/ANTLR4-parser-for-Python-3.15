@@ -1,12 +1,16 @@
 # Python 3 port
+
 ## 
+
 #### Prerequisites:
+
 - Installed [ANTLR4-tools](https://github.com/antlr/antlr4/blob/master/doc/getting-started.md#getting-started-the-easy-way-using-antlr4-tools)
 - Installed [Python 3](https://www.python.org/downloads/)
 - Installed [ANTLR4 Python 3 runtime](https://pypi.org/project/antlr4-python3-runtime/)
 
 
 #### Command line example:
+
 - first copy the two grammar files and the example.py to this directory:
 
 Linux:
@@ -30,4 +34,5 @@ pygrun --tree Python file_input example.py
 
 
 #### Related link:
+
 [ANTLR4 Python 3 target](https://github.com/antlr/antlr4/blob/master/doc/python-target.md)

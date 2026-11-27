@@ -13,7 +13,6 @@ from PythonParser import PythonParser
 
 # Encoding detection constants
 class Encodings:
-    UTF8 = "utf-8"
     UTF8_BOM = bytes([0xef, 0xbb, 0xbf])
     UTF32_BE_BOM = bytes([0x00, 0x00, 0xfe, 0xff])
     UTF32_LE_BOM = bytes([0xff, 0xfe, 0x00, 0x00])
@@ -24,7 +23,7 @@ class Encodings:
     MAX_ASCII = 0x7f
 
 class Grun4py:
-    _DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING # Python 2 = ASCII, Python 3 = utf-8
+    _DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING # Python 2: ASCII, Python 3: utf-8
     _ENCODING_REGEX = re.compile(r'^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)')
     _COMMENT_REGEX = re.compile(r'^[ \t\f]*(#.*)?$')
     _ENCODING_MAP = {

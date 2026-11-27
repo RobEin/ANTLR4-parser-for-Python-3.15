@@ -30,12 +30,12 @@ using Antlr4.Runtime;
 using System.Collections.Frozen;
 
 //#nullable enable
-[assembly: CLSCompliant(true)]//
+[assembly: CLSCompliant(true)]//#nullable disable
 
 public abstract class PythonLexerBase : Lexer
 {
     // The default encoding for Python 3 source files without an encoding declaration (PEP 3120)
-    public const string DEFAULT_ENCODING = "utf-8";
+    public static readonly string DEFAULT_ENCODING = "utf-8";
 
     private const int TAB_LENGTH = 8;
     private const string ERR_TXT = " ERROR: ";
@@ -143,7 +143,7 @@ public abstract class PythonLexerBase : Lexer
     public override IToken NextToken() // Reading the input stream until EOF is reached
     {
         this.ProcessCurrentToken();
-        IToken firstPendingToken = this.pendingTokenQueue.First!.Value;
+        var firstPendingToken = this.pendingTokenQueue.First!.Value;
         this.pendingTokenQueue.RemoveFirst();
         return firstPendingToken; // Add the queued token to the token stream
     }
@@ -257,13 +257,13 @@ public abstract class PythonLexerBase : Lexer
         if (this.sourceEncoding == string.Empty) return;
 
         var encodingToken = new CommonToken(this.curToken);
-        encodingToken!.Type = PythonLexer.ENCODING;
-        encodingToken!.Channel = TokenConstants.HiddenChannel;
-        encodingToken!.StartIndex = 0;
-        encodingToken!.StopIndex = 0;
-        encodingToken!.Text = this.sourceEncoding;
-        encodingToken!.Line = 0;
-        encodingToken!.Column = -1;
+        encodingToken.Type = PythonLexer.ENCODING;
+        encodingToken.Channel = TokenConstants.HiddenChannel;
+        encodingToken.StartIndex = 0;
+        encodingToken.StopIndex = 0;
+        encodingToken.Text = this.sourceEncoding;
+        encodingToken.Line = 0;
+        encodingToken.Column = -1;
         AddPendingToken(encodingToken);
     }
 
@@ -436,7 +436,7 @@ public abstract class PythonLexerBase : Lexer
                 // append the current brace expression with the current newline
                 this.AppendToBraceExpression(this.curToken.Text);
                 var nlToken = new CommonToken(this.curToken);
-                nlToken!.Channel = TokenConstants.HiddenChannel;
+                nlToken.Channel = TokenConstants.HiddenChannel;
                 this.curToken = nlToken;
                 break;
             case PythonLexer.LBRACE:
@@ -702,8 +702,8 @@ public abstract class PythonLexerBase : Lexer
         var curTokenText = this.curToken.Text;
         var tokenTextWithoutLastChar = curTokenText[..^1];
         var token = new CommonToken(this.curToken);
-        token!.Text = tokenTextWithoutLastChar;
-        token!.StopIndex -= 1;
+        token.Text = tokenTextWithoutLastChar;
+        token.StopIndex -= 1;
         this.AddPendingToken(token);
 
         this.CreateNewCurrentTokenInstance(tokenType, tokenText, channel); // set curToken
@@ -719,9 +719,9 @@ public abstract class PythonLexerBase : Lexer
             // (used as a format specifier instead of a walrus operator),
             // and move the equal sign to the beginning of the next token (FSTRING_MIDDLE or TSTRING_MIDDLE).
             var colonequalToken = new CommonToken(this.curToken);
-            colonequalToken!.Type = PythonLexer.COLON;
-            colonequalToken!.Text = ":";
-            colonequalToken!.StopIndex = colonequalToken.StartIndex;
+            colonequalToken.Type = PythonLexer.COLON;
+            colonequalToken.Text = ":";
+            colonequalToken.StopIndex = colonequalToken.StartIndex;
             this.curToken = colonequalToken;
 
             switch (this.laToken.Type)
@@ -746,12 +746,12 @@ public abstract class PythonLexerBase : Lexer
     private void CreateNewCurrentTokenInstance(int tokenType, string tokenText, int channel)
     {
         var token = new CommonToken(this.curToken);
-        token!.Type = tokenType;
-        token!.Text = tokenText;
-        token!.Channel = channel;
-        token!.Column += 1;
-        token!.StartIndex += 1;
-        token!.StopIndex = token.StartIndex;
+        token.Type = tokenType;
+        token.Text = tokenText;
+        token.Channel = channel;
+        token.Column += 1;
+        token.StartIndex += 1;
+        token.StopIndex = token.StartIndex;
         this.curToken = token;
     }
 
@@ -868,10 +868,10 @@ public abstract class PythonLexerBase : Lexer
     private void CreateAndAddPendingToken(IToken originalToken, int tokenType, string? tokenText = null)
     {
         var token = new CommonToken(originalToken);
-        token!.Type = tokenType;
-        token!.Channel = TokenConstants.DefaultChannel;
-        token!.StopIndex = originalToken.StartIndex - 1;
-        token!.Text = tokenText ?? $"<{this.Vocabulary.GetSymbolicName(tokenType)}>";
+        token.Type = tokenType;
+        token.Channel = TokenConstants.DefaultChannel;
+        token.StopIndex = originalToken.StartIndex - 1;
+        token.Text = tokenText ?? $"<{this.Vocabulary.GetSymbolicName(tokenType)}>";
 
         this.AddPendingToken(token);
     }

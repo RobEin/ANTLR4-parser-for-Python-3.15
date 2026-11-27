@@ -13,7 +13,6 @@ import PythonParser from "./PythonParser.js";
 
 // Encoding detection constants
 const Encodings = {
-    UTF8: "utf-8",
     UTF8_BOM: [0xef, 0xbb, 0xbf],
     UTF32_BE_BOM: [0x00, 0x00, 0xfe, 0xff],
     UTF32_LE_BOM: [0xff, 0xfe, 0x00, 0x00],
@@ -25,7 +24,7 @@ const Encodings = {
 };
 
 const Grun4py = class {
-    DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2 = ASCII, Python 3 = utf-8
+    DEFAULT_ENCODING = PythonLexer.DEFAULT_ENCODING; // Python 2: ASCII, Python 3: utf-8
     ENCODING_REGEX = /^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)/;
     COMMENT_REGEX = /^[ \t\f]*(#.*)?$/;
 
@@ -211,6 +210,7 @@ const Grun4py = class {
     readAsciiLine(fd) {
         const buf = Buffer.alloc(1);
         const lineBuilder = [];
+
         while (fs.readSync(fd, buf, 0, 1, null) !== 0) {
             const ascii = buf[0];
             if (ascii > Encodings.MAX_ASCII) return null;

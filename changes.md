@@ -1,45 +1,51 @@
 # Nov. 25, 2026
+
 - parser grammar update for Python 3.15.2
 - added 'lazy' soft keyword
 - removed inconsistent tabs and spaces checking in indentations 
 
 # Jul. 24, 2026
+
 - parser grammar update for Python 3.14.6
 - tokenizing t-string literals
 - tokenizing BOM Unicode character at the start of the file so it is skipped in the token stream
 - moved encoding detection from PythonLexerBase to a separate component (grun4py)
 
 # Dec. 24, 2025
+
 - parser grammar update for Python 3.14.2
 - tokenizing t-string literals
 - tokenizing BOM Unicode character at the start of the file so it is skipped in the token stream
 - moved encoding detection from PythonLexerBase to a separate component (grun4py)
 
 # Jan. 07, 2025
+
 - parser grammar update for Python 3.13.1
 - added ENCODING token
 - complete rewrite of fstring tokenizer in lexer grammar and PythonLexerBase class
-    - now correctly tokenizes the followings in fstring:
-        - escape sequences
-        - walrus operator
-        - dictionary comprehension
-        - set comprehension
+  - now correctly tokenizes the followings in fstring:
+    - escape sequences
+    - walrus operator
+    - dictionary comprehension
+    - set comprehension
 - soft keywords changes:
-    - no embedded code (semantic predicates) in parser grammar for soft keywords
-    - no need for PythonParserBase class
-    - no need for transformGrammar.py
-    - BREAKING CHANGES:
-        - dedicated tokens for soft keywords instead of NAME token:
-          - NAME_OR_TYPE
-          - NAME_OR_MATCH
-          - NAME_OR_CASE
-          - NAME_OR_WILDCARD
+  - no embedded code (semantic predicates) in parser grammar for soft keywords
+  - no need for PythonParserBase class
+  - no need for transformGrammar.py
+  - BREAKING CHANGES:
+    - dedicated tokens for soft keywords instead of NAME token:
+      - NAME_OR_TYPE
+      - NAME_OR_MATCH
+      - NAME_OR_CASE
+      - NAME_OR_WILDCARD
 
 # Oct. 18, 2024
+
 - Fix that `case [a, *_] if a == 0:` throws error rule soft_kw__not__wildcard failed predicate:
   `{this.isnotEqualToCurrentTokenText("_")}?`
 
 # Sep. 05, 2024
+
 - Type comment tokens are no longer generated.  
   Type comments will now be tokenized as plain comment tokens.  
   

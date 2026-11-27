@@ -309,13 +309,13 @@ class PythonLexerBase(Lexer):
 
     def _increment_brace_depth(self) -> None:  # increment the last element (stack peek + 1)
         if not self._paren_or_bracket_opened_stack:
-                raise RuntimeError(f"Cannot increment brace depth. (detected at line {self._cur_token.line})")
+            raise RuntimeError(f"Cannot increment brace depth. (detected at line {self._cur_token.line})")
 
         self._paren_or_bracket_opened_stack[-1] += 1
 
     def _decrement_brace_depth(self) -> None:  # decrement the last element (stack peek - 1)
         if not self._paren_or_bracket_opened_stack:
-                raise RuntimeError(f"Cannot decrement brace depth: stack is empty. (detected at line {self._cur_token.line})")
+            raise RuntimeError(f"Cannot decrement brace depth: stack is empty. (detected at line {self._cur_token.line})")
 
         top: int = self._paren_or_bracket_opened_stack[-1]
         if top <= 0:

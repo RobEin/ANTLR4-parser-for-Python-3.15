@@ -397,24 +397,22 @@ export default class PythonLexerBase extends Lexer {
     }
 
     #appendToBraceExpression(text) {
-        if (this.#braceExpressionStack.length === 0) throw new Error(`Cannot append to brace expression: stack is empty. (detected at line ${this.#curToken.line})`);
+        const top = this.#braceExpressionStack.pop() ?? "";
+        if (top === "") {throw new Error(`Cannot append to brace expression. (detected at line ${this.#curToken.line})`);}
 
-        const top = this.#braceExpressionStack.pop();
         this.#braceExpressionStack.push(top + text);
     }
 
     #incrementBraceDepth() { // increment the last element (stack peek + 1)
-        if (this.#parenOrBracketOpenedStack.length === 0) throw new Error(`Cannot increment brace depth. (detected at line ${this.#curToken.line})`);
+        const top = this.#parenOrBracketOpenedStack.pop() ?? -1;
+        if (top === -1) {throw new Error(`Cannot increment brace depth. (detected at line ${this.#curToken.line})`);}
 
-        const top = this.#parenOrBracketOpenedStack.pop();
         this.#parenOrBracketOpenedStack.push(top + 1);
     }
 
     #decrementBraceDepth() { // decrement the last element (stack peek - 1)
-        if (this.#parenOrBracketOpenedStack.length === 0) throw new Error(`Cannot decrement brace depth: stack is empty. (detected at line ${this.#curToken.line})`);
-
-        const top = this.#parenOrBracketOpenedStack.pop();
-        if (top <= 0) throw new Error(`Cannot decrement brace depth: depth is already zero. (detected at line ${this.#curToken.line})`);
+        const top = this.#parenOrBracketOpenedStack.pop() ?? -1;
+        if (top <= 0) {throw new Error(`Cannot decrement brace depth. (detected at line ${this.#curToken.line})`);}
 
         this.#parenOrBracketOpenedStack.push(top - 1);
     }
@@ -497,13 +495,13 @@ export default class PythonLexerBase extends Lexer {
     }
 
     #setLexerModeByCOLONorCOLONEQUALtoken() {
-        if (this.#parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot peek brace depth: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#parenOrBracketOpenedStack.length <= 0) {throw new Error(`Cannot peek brace depth: stack is empty. (detected at line ${this.#curToken.line})`);}
 
         // Exit early when the current lexer mode indicates an open parenthesis/bracket
         const opened = this.#parenOrBracketOpenedStack.at(-1) > 0; /* stack peek */
         if (opened) return;
 
-        if (this.#lexerModeStack.length <= 0) throw new Error(`Cannot peek lexer mode: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#lexerModeStack.length <= 0) {throw new Error(`Cannot peek lexer mode: stack is empty. (detected at line ${this.#curToken.line})`);}
 
         // COLONEQUAL token will be replaced with a COLON token in processCurrentToken()
         const prevLexerMode = this.#lexerModeStack.at(-1); /* stack peek */
@@ -591,16 +589,18 @@ export default class PythonLexerBase extends Lexer {
     }
 
     #popByBRACE() {
-        if (this.#parenOrBracketOpenedStack.length <= 0) throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#parenOrBracketOpenedStack.length <= 0) {throw new Error(`Cannot pop brace depth: stack is empty. (detected at line ${this.#curToken.line})`);}
         this.#parenOrBracketOpenedStack.pop();
         
-        if (this.#braceExpressionStack.length <= 0) throw new Error(`Cannot pop brace expression: stack is empty. (detected at line ${this.#curToken.line})`);
-        const parentBraceExpression = this.#braceExpressionStack.pop();
+        const parentBraceExpression = this.#braceExpressionStack.pop() ?? "";
+        if (parentBraceExpression === "") {throw new Error(`Cannot pop brace expression. (detected at line ${this.#curToken.line})`);}
 
         this.#lastClosedBraceExpression = parentBraceExpression + "}";
         if (this.#braceExpressionStack.length > 0) {
             // Extend the current brace expression by adding the previous expression
-            const parentBraceExpression = this.#braceExpressionStack.pop();
+            const parentBraceExpression = this.#braceExpressionStack.pop() ?? "";
+            if (parentBraceExpression === "") {throw new Error(`Cannot pop brace expression. (detected at line ${this.#curToken.line})`);}
+
             this.#braceExpressionStack.push(parentBraceExpression + this.#lastClosedBraceExpression);
         }
     }
@@ -698,7 +698,7 @@ export default class PythonLexerBase extends Lexer {
     }
 
     #popLexerMode() {
-        if (this.#lexerModeStack.length <= 0) throw new Error(`Cannot pop lexer mode: stack is empty. (detected at line ${this.#curToken.line})`);
+        if (this.#lexerModeStack.length <= 0) {throw new Error(`Cannot pop lexer mode: stack is empty. (detected at line ${this.#curToken.line})`);}
 
         this.popMode();
         this.#currentLexerMode = this.#lexerModeStack.pop();
